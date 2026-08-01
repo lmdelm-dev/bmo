@@ -80,7 +80,7 @@ exec python3 "$DEST/gameboy.py" "\$@"
 EOF
 chmod +x "$BIN_DIR/bmo"
 
-# 5. icon + desktop entry (double-click)
+# 5. icon + desktop entry (app menu)
 mkdir -p "$ICON_DIR" "$APP_DIR"
 cp -f "$DEST/assets/bmo-icon.png" "$ICON_DIR/bmo.png"
 cat > "$APP_DIR/bmo.desktop" <<EOF
@@ -95,6 +95,23 @@ Categories=Utility;TerminalEmulator;
 Terminal=false
 StartupNotify=false
 EOF
+
+# 5b. put a double-clickable BMO icon on the Desktop
+DESKTOP_DIR="${XDG_DESKTOP_DIR:-}"
+if [ -z "$DESKTOP_DIR" ] && need xdg-user-dir; then
+    DESKTOP_DIR="$(xdg-user-dir DESKTOP 2>/dev/null)"
+fi
+if [ -z "$DESKTOP_DIR" ]; then
+    DESKTOP_DIR="$HOME/Desktop"
+fi
+if [ -d "$DESKTOP_DIR" ]; then
+    cp -f "$APP_DIR/bmo.desktop" "$DESKTOP_DIR/bmo.desktop"
+    chmod +x "$DESKTOP_DIR/bmo.desktop"
+    if need gio; then
+        gio set "$DESKTOP_DIR/bmo.desktop" metadata::trusted true >/dev/null 2>&1 || true
+    fi
+    echo "    desktop launcher: $DESKTOP_DIR/bmo.desktop"
+fi
 
 # 6. Blue Water logo font
 mkdir -p "$FONT_DIR"

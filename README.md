@@ -102,17 +102,21 @@ git remote add origin https://github.com/lmdelm-dev/bmo.git
 git push -u origin main
 git push origin v0.1.0
 
-# 3. now that the tarball exists on GitHub, fill in the real checksums:
-./scripts/release.sh v0.1.0        # downloads + computes + updates files
-git add Formula pkg && git commit -m "chore: update v0.1.0 checksums" && git push
+# 3. now that the tarball exists on GitHub, get the real checksums:
+./scripts/release.sh v0.1.0   # prints the sha256 and updates Formula + AUR files
 ```
+
+> Note: a tag commit cannot contain its own tarball checksum (it would change the
+> tarball). The computed sha256 must live in the **AUR repo** and the **Homebrew
+> tap repo** (separate git repos), which `scripts/release.sh` produces for you.
 
 After that:
 - **npm / bun**: `npm publish` (must be run from a machine logged into npm; requires an npm account with `@lmdelm-dev` scope access).
-- **Homebrew**: create `github.com/lmdelm-dev/homebrew-tap`, put `Formula/bmo.rb` in it, push.
-- **AUR / paru**: push `pkg/aur/` (as `bmo/` repo) to aur.archlinux.org; `paru -S bmo` then works.
+- **Homebrew**: create `github.com/lmdelm-dev/homebrew-tap`, put the updated `Formula/bmo.rb` in it, push.
+- **AUR / paru**: push the updated `pkg/aur/` (as `bmo/` repo) to aur.archlinux.org; `paru -S bmo` then works.
 
-CI will verify the committed checksums match the tag on every tag push.
+CI lints on push, and on each tag it re-packages the GitHub tarball to confirm it
+builds.
 
 ## License
 

@@ -31,14 +31,21 @@ jobs:
       - name: Homebrew formula syntax
         run: ruby -c Formula/bmo.rb
 
-  checksums:
-    # on every tag, verify the committed sha256 matches the GitHub tarball
+  release-package:
+    # on every tag, verify the source tarball packages cleanly (mirrors the
+    # checksum the release notes will point at). The real sha256 lives in the
+    # AUR/tap repos; run ./scripts/release.sh after pushing a tag to get it.
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Verify release checksums
+      - name: Verify tag tarball packages
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
-          chmod +x scripts/release.sh
-          ./scripts/release.sh --check "$TAG"
+          curl -fsSL "https://codeload.github.com/lmdelm-dev/bmo/tar.gz/refs/tags/${TAG}" -o /tmp/bmo.tar.gz
+          tar xzf /tmp/bmo.tar.gz
+          python -m py_compile "bmo-${TAG}/gameboy.py"
+          cd "bmo-${TAG}"
+          bash -n install.sh bmo scripts/release.sh
+          node --check cli.js
+          echo "tag tarball OK"

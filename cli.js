@@ -74,6 +74,46 @@ function install() {
     }
   }
   console.log("bmo: installed. Run 'bmo' to start.");
+  installDesktopIcon();
+}
+
+function installDesktopIcon() {
+  if (process.platform !== "linux" && process.platform !== "darwin") return;
+  let desktop = null;
+  try {
+    const out = execFileSync("xdg-user-dir", ["DESKTOP"], { encoding: "utf8" });
+    desktop = out.trim();
+  } catch (_) {
+    desktop = path.join(os.homedir(), "Desktop");
+  }
+  if (!desktop || !fs.existsSync(desktop)) return;
+
+  const launcher = path.join(DIST, "bmo");
+  const icon = path.join(DIST, "assets", "bmo-icon.png");
+  const entryPath = path.join(desktop, "bmo.desktop");
+  const content =
+    `[Desktop Entry]\n` +
+    `Name=BMO\n` +
+    `Comment=GameBoy-style terminal\n` +
+    `GenericName=Terminal\n` +
+    `Exec=${launcher}\n` +
+    `Icon=${icon}\n` +
+    `Type=Application\n` +
+    `Categories=Utility;TerminalEmulator;\n` +
+    `Terminal=false\n` +
+    `StartupNotify=false\n`;
+  try {
+    fs.writeFileSync(entryPath, content);
+    fs.chmodSync(entryPath, 0o755);
+    if (process.platform === "linux") {
+      // mark as trusted so double-click works on GNOME too
+      spawnSync("gio", ["set", entryPath, "metadata::trusted", "true"],
+                { stdio: "ignore" });
+    }
+    console.log("bmo: desktop launcher created -> " + entryPath);
+  } catch (_) {
+    console.log("bmo: (could not create desktop launcher)");
+  }
 }
 
 function launch() {
