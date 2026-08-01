@@ -2,7 +2,7 @@
 # BMO - GameBoy-style terminal (Python/tkinter)
 # Install with paru:  paru -S bmo
 pkgname=bmo
-pkgver=0.1.0
+pkgver=0.1.1
 pkgrel=1
 pkgdesc="BMO - a GameBoy-style terminal (tkinter)"
 arch=('any')

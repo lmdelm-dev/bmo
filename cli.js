@@ -39,6 +39,7 @@ function pythonBin() {
 function install() {
   if (fs.existsSync(APP_FILE)) {
     console.log("bmo: already installed in", DIST);
+    installDesktopIcon();
     return;
   }
   console.log("bmo: downloading BMO from", REPO);
@@ -79,12 +80,14 @@ function install() {
 
 function installDesktopIcon() {
   if (process.platform !== "linux" && process.platform !== "darwin") return;
-  let desktop = null;
-  try {
-    const out = execFileSync("xdg-user-dir", ["DESKTOP"], { encoding: "utf8" });
-    desktop = out.trim();
-  } catch (_) {
-    desktop = path.join(os.homedir(), "Desktop");
+  let desktop = process.env.XDG_DESKTOP_DIR || null;
+  if (!desktop) {
+    try {
+      const out = execFileSync("xdg-user-dir", ["DESKTOP"], { encoding: "utf8" });
+      desktop = out.trim();
+    } catch (_) {
+      desktop = path.join(os.homedir(), "Desktop");
+    }
   }
   if (!desktop || !fs.existsSync(desktop)) return;
 
@@ -105,15 +108,18 @@ function installDesktopIcon() {
   try {
     fs.writeFileSync(entryPath, content);
     fs.chmodSync(entryPath, 0o755);
-    if (process.platform === "linux") {
-      // mark as trusted so double-click works on GNOME too
+  } catch (err) {
+    console.log("bmo: (could not create desktop launcher)");
+    return;
+  }
+  if (process.platform === "linux") {
+    // mark as trusted so double-click works on GNOME too
+    try {
       spawnSync("gio", ["set", entryPath, "metadata::trusted", "true"],
                 { stdio: "ignore" });
-    }
-    console.log("bmo: desktop launcher created -> " + entryPath);
-  } catch (_) {
-    console.log("bmo: (could not create desktop launcher)");
+    } catch (_) {}
   }
+  console.log("bmo: desktop launcher created -> " + entryPath);
 }
 
 function launch() {
