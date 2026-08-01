@@ -10,9 +10,15 @@ looks around.
 
 ## Requirements
 
-- Python 3 with `tkinter`
-- Pillow (optional - needed for BMO's face saver)
-- `python-xlib` (Linux, optional - needed for the minimize/restore hotkey)
+The installer checks for these and installs any that are missing for you
+(it uses each tool's own one-liner - no manual steps):
+
+- Python 3 with `tkinter` (system package)
+- `Pillow` (optional - BMO's face saver)
+- `python-xlib` (Linux, optional - minimize/restore hotkey)
+- `xterm` (Linux, optional - the embedded interactive terminal)
+- `opencode` (optional - powers the `mo` command; installed via
+  `curl -fsSL https://opencode.ai/install | bash`)
 
 ## Install
 
@@ -23,7 +29,9 @@ curl -fsSL https://raw.githubusercontent.com/lmdelm-dev/bmo/main/install.sh | ba
 ```
 
 Installs to `~/.local/share/bmo`, adds a `bmo` command, a desktop entry, and the
-Blue Water logo font. Run it with `bmo` or from your app menu.
+Blue Water logo font. It also bootstraps any missing dependencies (Python 3 +
+tkinter, Pillow, python-xlib, xterm, opencode) using their standard installers.
+Run it with `bmo` or from your app menu.
 
 ### npm
 
