@@ -6,7 +6,7 @@ looks around.
 
 - **Linux** and **Windows**
 - Double-click to launch (desktop entry on Linux, `.pyw` on Windows)
-- Install via **curl | npm | bun | brew | paru**
+- Install via **curl | npm | bun | brew**
 
 ## Requirements
 
@@ -46,12 +46,6 @@ brew tap lmdelm-dev/tap https://github.com/lmdelm-dev/homebrew-tap
 brew install bmo
 ```
 
-### paru / AUR (Arch)
-
-```sh
-paru -S bmo
-```
-
 ### From source
 
 ```sh
@@ -84,9 +78,8 @@ Install [Python](https://python.org) (tick "Add python.exe to PATH", plus
 
 - `install.sh` - the curl installer (`BMO_REPO`/`BMO_BRANCH` env vars override the source)
 - `package.json` + `cli.js` - the npm/bun package (`@lmdelm-dev/bmo`)
-- `Formula/bmo.rb` - Homebrew formula (copy into the `lmdelm-dev/homebrew-tap` repo)
-- `pkg/aur/` - AUR `PKGBUILD` + `.SRCINFO` (submit to aur.archlinux.org)
-- `scripts/release.sh` - fills the real tarball sha256 into the Formula + AUR files
+- `Formula/bmo.rb` - Homebrew formula (lives in the `lmdelm-dev/homebrew-tap` repo)
+- `scripts/release.sh` - fills the real tarball sha256 into the Formula
 - `.github/workflows/ci.yml` - lint checks on push, checksum verification on tags
 
 ### Release checklist (publish a new version)
@@ -95,25 +88,24 @@ Install [Python](https://python.org) (tick "Add python.exe to PATH", plus
 # 1. commit your changes, then create the tag
 git add -A
 git commit -m "My change"
-git tag v0.1.0          # bump versions in package.json, Formula, PKGBUILD too
+git tag v0.1.0          # bump versions in package.json and Formula too
 
 # 2. push the repo and the tag
 git remote add origin https://github.com/lmdelm-dev/bmo.git
 git push -u origin main
 git push origin v0.1.0
 
-# 3. now that the tarball exists on GitHub, get the real checksums:
-./scripts/release.sh v0.1.0   # prints the sha256 and updates Formula + AUR files
+# 3. now that the tarball exists on GitHub, get the real checksum:
+./scripts/release.sh v0.1.0   # prints the sha256 and updates Formula/bmo.rb
 ```
 
 > Note: a tag commit cannot contain its own tarball checksum (it would change the
-> tarball). The computed sha256 must live in the **AUR repo** and the **Homebrew
-> tap repo** (separate git repos), which `scripts/release.sh` produces for you.
+> tarball). The computed sha256 must live in the **Homebrew tap repo**
+> (a separate git repo), which `scripts/release.sh` produces for you.
 
 After that:
 - **npm / bun**: `npm publish` (must be run from a machine logged into npm; requires an npm account with `@lmdelm-dev` scope access).
-- **Homebrew**: create `github.com/lmdelm-dev/homebrew-tap`, put the updated `Formula/bmo.rb` in it, push.
-- **AUR / paru**: push the updated `pkg/aur/` (as `bmo/` repo) to aur.archlinux.org; `paru -S bmo` then works.
+- **Homebrew**: push the updated `Formula/bmo.rb` to the `lmdelm-dev/homebrew-tap` repo; `brew install bmo` then works.
 
 CI lints on push, and on each tag it re-packages the GitHub tarball to confirm it
 builds.
