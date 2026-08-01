@@ -10,7 +10,7 @@ url="https://github.com/lmdelm-dev/bmo"
 license=('MIT')
 depends=('python' 'python-pillow' 'python-xlib' 'tk')
 source=("https://github.com/lmdelm-dev/bmo/archive/refs/tags/v${pkgver}.tar.gz")
-sha256sums=('1bb52ff36514505a6bdb38849af46badd5bb951b73ba072a8015f98205b7a784')
+sha256sums=('f0526c8e9521c961f6e0d48ba54e1eae4bd01f126f9e8e21d87dced515ab3296')
 
 package() {
   cd "${srcdir}/bmo-v${pkgver}"
