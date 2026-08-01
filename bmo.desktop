@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=BMO
+Comment=GameBoy-style terminal
+GenericName=Terminal
+Exec=bmo
+Icon=bmo
+Type=Application
+Categories=Utility;TerminalEmulator;
+Terminal=false
+StartupNotify=false

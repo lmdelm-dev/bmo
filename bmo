@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# BMO - GameBoy terminal launcher
+# Resolves its install directory, then runs gameboy.py with the right python.
+set -euo pipefail
+
+# Allow override (set by installers / package managers)
+if [ -n "${BMO_HOME:-}" ] && [ -f "$BMO_HOME/gameboy.py" ]; then
+    APP_DIR="$BMO_HOME"
+else
+    # this script may be a symlink in PATH -> resolve to real location
+    SELF="${BASH_SOURCE[0]}"
+    while [ -L "$SELF" ]; do
+        DIR="$(cd -P "$(dirname "$SELF")" >/dev/null 2>&1 && pwd)"
+        SELF="$(readlink "$SELF")"
+        case "$SELF" in
+            /*) ;;
+            *) SELF="$DIR/$SELF" ;;
+        esac
+    done
+    APP_DIR="$(cd -P "$(dirname "$SELF")" >/dev/null 2>&1 && pwd)"
+fi
+
+PY=""
+for c in python3 python; do
+    if command -v "$c" >/dev/null 2>&1; then
+        PY="$(command -v "$c")"
+        break
+    fi
+done
+if [ -z "$PY" ]; then
+    echo "BMO needs Python 3 (not found on PATH)." >&2
+    exit 1
+fi
+
+exec "$PY" "$APP_DIR/gameboy.py" "$@"

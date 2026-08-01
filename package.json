@@ -1,0 +1,31 @@
+{
+  "name": "@lmdelm-dev/bmo",
+  "version": "0.1.0",
+  "description": "BMO - a GameBoy-style terminal for Linux and Windows. Python (tkinter) app bootstrapped by npm/bun.",
+  "license": "MIT",
+  "bin": {
+    "bmo": "cli.js"
+  },
+  "scripts": {
+    "postinstall": "node cli.js --install"
+  },
+  "files": [
+    "cli.js"
+  ],
+  "os": [
+    "linux",
+    "darwin",
+    "win32"
+  ],
+  "keywords": [
+    "terminal",
+    "gameboy",
+    "bmo",
+    "tkinter",
+    "tui",
+    "adventure-time"
+  ],
+  "engines": {
+    "node": ">=14"
+  }
+}

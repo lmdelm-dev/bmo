@@ -1,0 +1,34 @@
+# Maintainer: your-name <your-email>
+# BMO - GameBoy-style terminal (Python/tkinter)
+# Install with paru:  paru -S bmo
+pkgname=bmo
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="BMO - a GameBoy-style terminal (tkinter)"
+arch=('any')
+url="https://github.com/lmdelm-dev/bmo"
+license=('MIT')
+depends=('python' 'python-pillow' 'python-xlib' 'tk')
+source=("https://github.com/lmdelm-dev/bmo/archive/refs/tags/v${pkgver}.tar.gz")
+sha256sums=('REPLACE_WITH_REAL_SHA256_OF_THE_v0.1.0_TAG')
+
+package() {
+  cd "${srcdir}/bmo-${pkgver}"
+
+  install -Dm644 "gameboy.py" "${pkgdir}/usr/share/bmo/gameboy.py"
+  install -d "${pkgdir}/usr/share/bmo/assets"
+  install -m644 assets/* "${pkgdir}/usr/share/bmo/assets/"
+
+  # launcher wrapper
+  cat > "${pkgdir}/usr/bin/bmo" <<EOF
+#!/bin/bash
+export BMO_HOME="/usr/share/bmo"
+exec /usr/bin/python3 "/usr/share/bmo/gameboy.py" "\$@"
+EOF
+  chmod 755 "${pkgdir}/usr/bin/bmo"
+
+  # desktop entry + icon for double-click
+  install -Dm644 "bmo.desktop" "${pkgdir}/usr/share/applications/bmo.desktop"
+  install -Dm644 "assets/bmo-icon.png" \
+      "${pkgdir}/usr/share/icons/hicolor/256x256/apps/bmo.png"
+}
