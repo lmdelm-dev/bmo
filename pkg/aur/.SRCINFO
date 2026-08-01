@@ -10,6 +10,6 @@ pkgbase = bmo
 	depends = python-xlib
 	depends = tk
 	source = https://github.com/lmdelm-dev/bmo/archive/refs/tags/v0.1.0.tar.gz
-	sha256sums = REPLACE_WITH_REAL_SHA256_OF_THE_v0.1.0_TAG
+	sha256sums = 1bb52ff36514505a6bdb38849af46badd5bb951b73ba072a8015f98205b7a784
 
 pkgname = bmo
