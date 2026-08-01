@@ -10,7 +10,7 @@ class Bmo < Formula
   desc "BMO - a GameBoy-style terminal (tkinter)"
   homepage "https://github.com/lmdelm-dev/bmo"
   url "https://github.com/lmdelm-dev/bmo/archive/refs/tags/v0.2.0.tar.gz"
-  sha256 "f0526c8e9521c961f6e0d48ba54e1eae4bd01f126f9e8e21d87dced515ab3296"
+  sha256 "1c923a360f31304130f8ff2fc434914eaadfd698b63d17cf1af18778aab3a3e9"
   license "MIT"
 
   depends_on "python@3.12"
