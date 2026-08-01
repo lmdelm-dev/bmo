@@ -82,18 +82,37 @@ Install [Python](https://python.org) (tick "Add python.exe to PATH", plus
 
 ## Packaging notes for maintainers
 
-- `install.sh` - the curl installer
+- `install.sh` - the curl installer (`BMO_REPO`/`BMO_BRANCH` env vars override the source)
 - `package.json` + `cli.js` - the npm/bun package (`@lmdelm-dev/bmo`)
 - `Formula/bmo.rb` - Homebrew formula (copy into the `lmdelm-dev/homebrew-tap` repo)
 - `pkg/aur/` - AUR `PKGBUILD` + `.SRCINFO` (submit to aur.archlinux.org)
+- `scripts/release.sh` - fills the real tarball sha256 into the Formula + AUR files
+- `.github/workflows/ci.yml` - lint checks on push, checksum verification on tags
 
-Before tagging `v0.1.0`, replace the two `REPLACE_WITH_REAL_SHA256...` placeholders
-(in `Formula/bmo.rb` and `pkg/aur/PKGBUILD` + `.SRCINFO`) with the real tarball
-checksum:
+### Release checklist (publish a new version)
 
 ```sh
-sha256sum <(curl -fsSL https://github.com/lmdelm-dev/bmo/archive/refs/tags/v0.1.0.tar.gz)
+# 1. commit your changes, then create the tag
+git add -A
+git commit -m "My change"
+git tag v0.1.0          # bump versions in package.json, Formula, PKGBUILD too
+
+# 2. push the repo and the tag
+git remote add origin https://github.com/lmdelm-dev/bmo.git
+git push -u origin main
+git push origin v0.1.0
+
+# 3. now that the tarball exists on GitHub, fill in the real checksums:
+./scripts/release.sh v0.1.0        # downloads + computes + updates files
+git add Formula pkg && git commit -m "chore: update v0.1.0 checksums" && git push
 ```
+
+After that:
+- **npm / bun**: `npm publish` (must be run from a machine logged into npm; requires an npm account with `@lmdelm-dev` scope access).
+- **Homebrew**: create `github.com/lmdelm-dev/homebrew-tap`, put `Formula/bmo.rb` in it, push.
+- **AUR / paru**: push `pkg/aur/` (as `bmo/` repo) to aur.archlinux.org; `paru -S bmo` then works.
+
+CI will verify the committed checksums match the tag on every tag push.
 
 ## License
 

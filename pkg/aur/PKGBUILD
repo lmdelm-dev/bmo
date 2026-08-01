@@ -13,13 +13,14 @@ source=("https://github.com/lmdelm-dev/bmo/archive/refs/tags/v${pkgver}.tar.gz")
 sha256sums=('REPLACE_WITH_REAL_SHA256_OF_THE_v0.1.0_TAG')
 
 package() {
-  cd "${srcdir}/bmo-${pkgver}"
+  cd "${srcdir}/bmo-v${pkgver}"
 
   install -Dm644 "gameboy.py" "${pkgdir}/usr/share/bmo/gameboy.py"
   install -d "${pkgdir}/usr/share/bmo/assets"
   install -m644 assets/* "${pkgdir}/usr/share/bmo/assets/"
 
   # launcher wrapper
+  install -d "${pkgdir}/usr/bin"
   cat > "${pkgdir}/usr/bin/bmo" <<EOF
 #!/bin/bash
 export BMO_HOME="/usr/share/bmo"
