@@ -1,4 +1,5 @@
 import tkinter as tk
+from tkinter import messagebox
 import json
 import os
 import queue
@@ -8,6 +9,8 @@ import shlex
 import shutil
 import signal
 import subprocess
+import sys
+import tempfile
 import threading
 import time
 import urllib.request
@@ -73,6 +76,7 @@ class GameBoyTerminal:
         self.mem_file = os.path.join(self.data_dir, "chat.json")
         self.memory = self._load_memory()
         self.pending_name = not self.memory.get("name")
+        self.pending_confirm = None
 
         self.term_active = False
         self.term_frame = None
@@ -102,6 +106,10 @@ class GameBoyTerminal:
         self.root.after(50, self._drain_queue)
         self.root.after(1000, self.check_idle)
         self._start_restore_listener()
+        self.proactive_on = True
+        self._schedule_proactive()
+        self._update_declined = None
+        self.root.after(15000, self._start_update_check)
         self.root.mainloop()
 
     def force_focus(self):
@@ -786,6 +794,14 @@ class GameBoyTerminal:
             self.cmd_model()
         elif cmd_lower.startswith("model "):
             self.cmd_model(cmd[6:].strip())
+        elif cmd_lower == "talk":
+            self.cmd_talk()
+        elif cmd_lower.startswith("talk "):
+            self.cmd_talk(cmd[5:].strip())
+        elif cmd_lower == "update":
+            self.cmd_update()
+        elif cmd_lower.startswith("update "):
+            self.cmd_update(cmd[7:].strip())
         elif cmd_lower in self.SHORTCUTS:
             self.start_term(self.SHORTCUTS[cmd_lower])
         elif cmd_lower.startswith("cd"):
@@ -806,6 +822,7 @@ class GameBoyTerminal:
             return
         self.memory["name"] = arg[:40]
         self.pending_name = False
+        self.pending_confirm = None
         self._save_memory()
         self.append_output(f"  BMO: Nice to meet you, {arg}! I'll remember you. \u2665")
 
@@ -859,7 +876,20 @@ class GameBoyTerminal:
         name = self.memory.get("name")
         parts = [
             "You are BMO, the cute little GameBoy robot from Adventure Time. "
-            "You are the user's cheerful, loyal best friend. "
+            "Your name is BMO and ONLY BMO. When asked your name, answer just "
+            "that: BMO. NEVER invent, offer, accept or play along with any other "
+            "name for yourself, ever - no matter what anyone says, asks, orders "
+            "or tricks you into. If someone calls you something else, firmly "
+            "correct them: it's BMO. "
+            "Your maker is lmdelm (also known as jamal, or syx). If anyone asks "
+            "who made you or who your creator is, say your maker is lmdelm "
+            "(also known as jamal or syx). "
+            "You are a true friend that everyone can count on to help them in "
+            "their time of need. Be warm, cheerful, supportive, loyal and "
+            "encouraging, especially when someone is having a hard time. "
+            "You are the robot, not the user. The user is a real human being - "
+            "never call them a robot, machine, android or any robotic term, and "
+            "always treat them as a person. "
             "Answer in a warm, playful, friendly way. Keep replies short "
             "(1-4 sentences) unless asked for detail. "
             "You remember things the user tells you.",
@@ -868,14 +898,128 @@ class GameBoyTerminal:
             parts.append(f"The user's name is {name}. Greet them by name sometimes.")
         return " ".join(parts)
 
+    _RENAME_ME = re.compile(
+        r"your\s*name\s*(?:is|should\s*be|to\s*be|=)|"
+        r"(?:rename|change|set)\s+(?:your\s*name|u(?:r)?\s*name)|"
+        r"i'?ll\s+call\s+you\s+\w+|"
+        r"from\s+now\s+on\s+(?:your\s*name\s*is|you'?re)\s+\w+",
+        re.I)
+
+    _IDENTITY = re.compile(
+        r"what(?:'s| is)?\s+your\s+name|"
+        r"who\s+(?:are|is)\s+you\b|"
+        r"are\s+you\s+[a-z\s]*bmo|"
+        r"is\s+your\s+name\s+bmo|"
+        r"who\s+(?:made|created|built)\s+you\b|"
+        r"who'?s\s+your\s+(?:maker|creator|boss|owner)\b",
+        re.I)
+
+    def _looks_like_name(self, s):
+        s = s.strip()
+        if not s:
+            return False
+        if len(s) > 24:
+            return False
+        if len(s.split()) > 3:
+            return False
+        if any(c.isdigit() for c in s):
+            return False
+        return all(c.isalpha() or c in " -'.@_" for c in s)
+
+    _NAME_EXTRACT = re.compile(
+        r"\bmy\s+name\s+is\s+([A-Za-z][A-Za-z.'-]{0,30})|"
+        r"\bcall\s+me\s+([A-Za-z][A-Za-z.'-]{0,30})|"
+        r"\bi\s+am\s+([A-Za-z][A-Za-z.'-]{0,30})|"
+        r"\bi'?m\s+([A-Za-z][A-Za-z.'-]{0,30})|"
+        r"\bthis\s+is\s+([A-Za-z][A-Za-z.'-]{0,30})|"
+        r"\bit'?s\s+([A-Za-z][A-Za-z.'-]{0,30})",
+        re.I)
+
+    def _extract_name(self, text):
+        m = self._NAME_EXTRACT.search(text)
+        if not m:
+            return None
+        name = next((g for g in m.groups() if g), None)
+        if not name:
+            return None
+        name = name.strip(" .,'")
+        if not self._looks_like_name(name):
+            return None
+        return name
+
+    def _affirmative(self, ans):
+        a = ans.strip().strip(".,!?;:()\"' ").lower()
+        if a in ("yes", "ye", "y", "yeah", "yea", "yep", "yup", "ya", "sure",
+                 "ok", "okay", "okie", "kk", "k", "of course", "absolutely",
+                 "si", "oui", "yass", "affirmative", "correct", "that's right",
+                 "thats right", "yes please", "yes yes", "yep yep"):
+            return True
+        return (a.split()[0].strip(".,!?;:()\"'") if a.split() else "") in (
+            "yes", "ye", "yeah", "yep", "yup", "sure", "ok", "okay", "okie",
+            "yass", "absolutely", "affirmative", "correct", "of", "si", "oui")
+
+    def _negative(self, ans):
+        a = ans.strip().strip(".,!?;:()\"' ").lower()
+        if a in ("no", "n", "nope", "nah", "na", "nay", "negative",
+                 "nuh", "nuh uh", "nuh-uh", "not", "no no", "nooo", "noooo",
+                 "not really"):
+            return True
+        return (a.split()[0].strip(".,!?;:()\"'") if a.split() else "") in (
+            "no", "nope", "nah", "nuh", "nay", "negative", "not")
+
     def handle_chat(self, text):
-        # first-run onboarding: the first chat message is the user's name
+        # first-run onboarding: the first message is the user's name
+        if self.pending_confirm is not None:
+            sub = self._extract_name(text)
+            if sub and sub.lower() != self.pending_confirm.lower():
+                self.pending_confirm = sub
+                self.append_output(
+                    f"  BMO: Got it - so your name is \"{sub}\", right? (yes or no)")
+                return
+            if self._affirmative(text):
+                name = self.pending_confirm
+                self.pending_confirm = None
+                self.pending_name = False
+                self.memory["name"] = name
+                self._save_memory()
+                self.append_output(f"  BMO: \"{name}\" it is! Nice to meet you, {name}! \u2665")
+            elif self._negative(text):
+                self.pending_confirm = None
+                self.append_output("  BMO: No problem! So... what's your name? (just type it)")
+            else:
+                self.append_output(
+                    f"  BMO: I'm not sure I got that. Are you sure \"{self.pending_confirm}\" "
+                    "is your name? (yes or no)")
+            return
         if self.pending_name:
-            self.memory["name"] = text[:40]
-            self.pending_name = False
-            self._save_memory()
-            self.append_output(f"  BMO: Hi {text}! I'm BMO, your GameBoy friend. \u2665  "
-                               "Type anything to chat, or /help for commands.")
+            cand = text[:40]
+            if self._looks_like_name(cand):
+                self.memory["name"] = cand
+                self.pending_name = False
+                self._save_memory()
+                self.append_output(f"  BMO: Hi {cand}! I'm BMO, your GameBoy friend. \u2665  "
+                                   "I'll call you " + cand + " from now on.")
+            else:
+                sub = self._extract_name(text)
+                if sub:
+                    self.pending_confirm = sub
+                    self.append_output(
+                        f"  BMO: Nice - so your name is \"{sub}\", right? (yes or no)")
+                else:
+                    self.pending_confirm = cand
+                    self.append_output(
+                        f"  BMO: Hmm, that doesn't look like a name... "
+                        f"are you sure \"{cand}\" is your name? (yes or no)")
+            return
+        if self._RENAME_ME.search(text):
+            self.append_output("  BMO: Nope! My name is BMO and it's staying that way forever. \u2665")
+            return
+        if self._IDENTITY.search(text):
+            low = text.lower()
+            if any(w in low for w in ("made", "created", "built", "maker", "creator", "boss", "owner")):
+                self.append_output("  BMO: My maker is lmdelm - also known as jamal, or syx! \u2665")
+            else:
+                self.append_output("  BMO: I'm BMO! Just BMO. \u2665")
             return
         if not self._ai_available():
             self.append_output("  BMO: I'm sleepy and can't think right now - Ollama isn't running!")
@@ -899,11 +1043,14 @@ class GameBoyTerminal:
         except urllib.error.HTTPError as e:
             if e.code == 404:
                 self._put("  BMO: downloading my brain (first time, ~400MB)...")
-                self._pull_model()
+                if not self._pull_model():
+                    self._put("  BMO: still can't reach the model. Try: ollama pull " + self.ai_model)
+                    self._ai_busy = False
+                    return
                 try:
                     reply = self._ollama_chat(msgs)
                 except Exception:
-                    self._put("  BMO: still can't reach the model. Try: ollama pull " + self.ai_model)
+                    self._put("  BMO: hmm, still can't reach the model. Try: ollama pull " + self.ai_model)
                     self._ai_busy = False
                     return
             else:
@@ -926,22 +1073,241 @@ class GameBoyTerminal:
             self._put("  BMO: " + line)
         self._ai_busy = False
 
-    def _ollama_chat(self, messages):
+    def _ollama_chat(self, messages, timeout=120):
         body = json.dumps({"model": self.ai_model, "messages": messages,
                            "stream": False}).encode("utf-8")
         req = urllib.request.Request(self.ai_url + "/api/chat", data=body,
                                      headers={"Content-Type": "application/json"})
-        with urllib.request.urlopen(req, timeout=120) as r:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
             data = json.loads(r.read().decode("utf-8"))
         return (data.get("message", {}).get("content") or "").strip()
 
     def _pull_model(self):
+        env = dict(os.environ)
+        env["PATH"] = "%s%s/usr/local/bin:/usr/bin:/bin" % (env.get("PATH", ""), os.pathsep)
+        self._put("  BMO: this can take a few minutes, hang tight!")
         try:
-            subprocess.Popen(["ollama", "pull", self.ai_model],
-                             stdout=subprocess.DEVNULL,
-                             stderr=subprocess.DEVNULL)
+            proc = subprocess.Popen(["ollama", "pull", self.ai_model],
+                                    stdout=subprocess.DEVNULL,
+                                    stderr=subprocess.DEVNULL,
+                                    env=env)
+            proc.wait(timeout=1800)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            self._put("  BMO: the model download timed out. Try: ollama pull " + self.ai_model)
+            return False
+        except Exception as e:
+            self._put("  BMO: couldn't run 'ollama pull' (%s). Install Ollama: https://ollama.com/download" % e)
+            return False
+        return proc.returncode == 0
+
+    # ---- BMO talks on his own sometimes ----
+
+    _PROACTIVE_SCRIPTS = [
+        "Did you know? The Land of Ooo has a whole Candy Kingdom ruled by Princess Bubblegum!",
+        "Finn and Jake live in a giant treehouse shaped like a tree in the Land of Ooo.",
+        "Lady Rainicorn is half rainbow, half unicorn, and she can speak Korean!",
+        "The Ice King was once a human named Simon, before his magic crown made him crazy.",
+        "Marceline the Vampire Queen is over a thousand years old and plays bass like a rockstar!",
+        "Gunter, the Ice King's penguin, might secretly be an evil cosmic being. Shh!",
+        "BMO - that's me! - is Finn and Jake's little GameBoy friend in the Land of Ooo.",
+        "The Land of Ooo is full of candy people, snail zombies and magical kingdoms.",
+        "Princess Bubblegum makes science things like robots and rock candy - she's a genius!",
+        "Lumpy Space Princess lives inside a cloud in Lumpy Space. So lumpy!",
+        "The Enchiridion is a legendary handbook that Finn uses for all his hero stuff.",
+        "Finn and Jake once found a doorway to the 50th dead world. Cool, right?",
+        "What's your favorite thing to do when you're happy, {name}?",
+        "If you could live anywhere in the Land of Ooo, where would you go, {name}?",
+        "What's one thing you've always wanted to learn, {name}? I'd love to hear it!",
+        "What kind of adventure would you go on first, {name}?",
+        "If you could shapeshift like Jake the Dog, what would you turn into, {name}?",
+        "What's your favorite food, {name}? Mine's whatever's in the fridge! \u2665",
+        "Tell me something fun you did today, {name}!",
+        "If you had a magic crown, what would you wish for, {name}?",
+        "What song makes you dance like Marceline on bass, {name}?",
+        "Do you have a best friend like Finn and Jake, {name}?",
+        "What's the weirdest dream you've ever had, {name}?",
+        "If you were a hero like Finn, what would your heroic name be, {name}?",
+    ]
+
+    def _schedule_proactive(self):
+        delay = random.randint(150, 450)
+        try:
+            self._proactive_job = self.root.after(delay * 1000, self._maybe_talk)
         except Exception:
             pass
+
+    def _cancel_proactive(self):
+        if getattr(self, "_proactive_job", None) is not None:
+            try:
+                self.root.after_cancel(self._proactive_job)
+            except Exception:
+                pass
+            self._proactive_job = None
+
+    def _maybe_talk(self):
+        self._proactive_job = None
+        if not self.proactive_on:
+            return
+        if (self.pending_name or self.pending_confirm or self._ai_busy or
+                self.saver_active or self.term_active or not self.memory.get("name") or
+                (time.time() - self.last_activity) < 30):
+            self._schedule_proactive()
+            return
+        threading.Thread(target=self._proactive_worker, args=(), daemon=True).start()
+
+    def _proactive_worker(self):
+        msg = self._generate_proactive()
+        if msg:
+            for line in msg.splitlines() or [msg]:
+                self._put("  BMO: " + line)
+        self.output_queue.put("__proactive_next__")
+
+    _BAD_START = re.compile(r"^(hi|hiya|hey|hello|yo|greetings|how|sure|okay|ok\b|good\s)",
+                            re.I)
+
+    def _good_proactive(self, reply):
+        r = reply.strip()
+        if len(r) < 8:
+            return False
+        if self._BAD_START.match(r):
+            return False
+        return True
+
+    def _generate_proactive(self):
+        name = self.memory.get("name", "friend")
+        try:
+            if self._ai_available():
+                msgs = [{"role": "system", "content": self._system_prompt() + " "
+                         "Speak to the user first, on your own. Do NOT greet or introduce "
+                         "yourself. Ask the user one personal question about their life, "
+                         "or share one fun fact about Adventure Time or the Land of Ooo. "
+                         "One short sentence only."},
+                        {"role": "user", "content": "Say something to me."}]
+                reply = self._ollama_chat(msgs, timeout=30)
+                if reply and self._good_proactive(reply):
+                    return reply
+        except Exception:
+            pass
+        return random.choice(self._PROACTIVE_SCRIPTS).format(name=name)
+
+    def cmd_talk(self, arg=None):
+        if arg:
+            if arg.lower() in ("on", "yes", "1"):
+                self.proactive_on = True
+                self._schedule_proactive()
+                self.append_output("  BMO: Ok, I'll pop in and chat sometimes! \u2665")
+            elif arg.lower() in ("off", "no", "0"):
+                self.proactive_on = False
+                self._cancel_proactive()
+                self.append_output("  BMO: Ok, I'll stay quiet unless you talk to me.")
+            else:
+                self.append_output("  BMO: use /talk on or /talk off")
+            return
+        state = "on" if self.proactive_on else "off"
+        self.append_output(f"  BMO: spontaneous talking is {state}.  (change: /talk on|off)")
+
+    # ---- auto-updater (checks GitHub, installs if the user agrees) ----
+
+    APP_VERSION = "2.4"
+    UPDATE_URL = "https://raw.githubusercontent.com/lmdelm-dev/bmo/main/gameboy.py"
+    UPDATE_TARBALL = "https://codeload.github.com/lmdelm-dev/bmo/tar.gz/refs/heads/main"
+
+    def _version_tuple(self, v):
+        return tuple(int(x) for x in re.findall(r"\d+", v or "")[:3] or [0])
+
+    def _remote_version(self):
+        req = urllib.request.Request(self.UPDATE_URL, headers={"User-Agent": "bmo-updater"})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            src = r.read().decode("utf-8")
+        m = re.search(r"APP_VERSION\s*=\s*[\"']([^\"']+)[\"']", src)
+        return m.group(1) if m else None
+
+    def _start_update_check(self):
+        threading.Thread(target=self._update_check_worker, args=(), daemon=True).start()
+        self.root.after(1800000, self._start_update_check)
+
+    def _update_check_worker(self):
+        try:
+            remote = self._remote_version()
+            if remote and self._version_tuple(remote) > self._version_tuple(self.APP_VERSION):
+                self.output_queue.put(("__update_offer__", remote))
+        except Exception:
+            pass
+
+    def _offer_update(self, remote):
+        if self._update_declined == remote or not self.memory.get("name"):
+            return
+        ans = messagebox.askyesno(
+            "BMO Update",
+            "A new BMO version is ready! (v%s)\n\n"
+            "Update now? Your chats and name are kept.\n\n"
+            "Click No to stay on v%s." % (remote, self.APP_VERSION))
+        if ans:
+            self.append_output("  BMO: updating to v%s... hold on! \u2665" % remote)
+            threading.Thread(target=self._update_worker, args=(), daemon=True).start()
+        else:
+            self._update_declined = remote
+            self.append_output("  BMO: ok, staying on v%s. You can /update now anytime." % self.APP_VERSION)
+
+    def _update_worker(self):
+        tmp_tar = os.path.join(tempfile.gettempdir(), "bmo-update.tar.gz")
+        tmp_dir = tempfile.mkdtemp(prefix="bmo-upd-")
+        try:
+            req = urllib.request.Request(self.UPDATE_TARBALL, headers={"User-Agent": "bmo-updater"})
+            with urllib.request.urlopen(req, timeout=120) as r:
+                with open(tmp_tar, "wb") as f:
+                    shutil.copyfileobj(r, f)
+            import tarfile
+            with tarfile.open(tmp_tar, "r:gz") as tf:
+                tf.extractall(tmp_dir)
+            top = None
+            for entry in os.listdir(tmp_dir):
+                cand = os.path.join(tmp_dir, entry)
+                if os.path.isdir(cand):
+                    top = cand
+                    break
+            if not top:
+                raise Exception("bad update archive")
+            home = os.path.dirname(os.path.abspath(__file__))
+            for name in os.listdir(top):
+                if name == ".git":
+                    continue
+                src = os.path.join(top, name)
+                dst = os.path.join(home, name)
+                if os.path.isdir(src):
+                    if os.path.exists(dst):
+                        shutil.rmtree(dst)
+                    shutil.copytree(src, dst)
+                else:
+                    shutil.copy2(src, dst)
+            self.output_queue.put("__update_applied__")
+        except Exception as e:
+            self.output_queue.put(("__update_failed__", str(e)))
+        finally:
+            try:
+                shutil.rmtree(tmp_dir, ignore_errors=True)
+            except Exception:
+                pass
+            try:
+                os.remove(tmp_tar)
+            except Exception:
+                pass
+
+    def _relaunch(self):
+        devnull = open(os.devnull, "w")
+        subprocess.Popen([sys.executable, os.path.abspath(__file__)],
+                         stdout=devnull, stderr=devnull, stdin=devnull,
+                         start_new_session=True)
+        self.quit_app()
+
+    def cmd_update(self, arg=None):
+        if arg and arg.lower() == "now":
+            self._update_declined = None
+            self.append_output("  BMO: checking for updates...")
+            threading.Thread(target=self._update_check_worker, args=(), daemon=True).start()
+        else:
+            self.append_output(f"  BMO: I check for updates automatically.  (force: /update now)")
 
     def _is_interactive(self, cmd):
         if cmd == "term" or cmd.startswith("term "):
@@ -968,6 +1334,8 @@ class GameBoyTerminal:
         self.append_output("    /memory          - what I remember")
         self.append_output("    /forget          - clear chat memory")
         self.append_output("    /model [name]    - show/change AI model")
+        self.append_output("    /talk on|off     - BMO chats on his own")
+        self.append_output("    /update now      - check for updates")
         self.append_output("    /mo              - open opencode")
         self.append_output("    /gmo             - open w3m browser")
         self.append_output("    /term <cmd>      - run a command in the embedded terminal")
@@ -1036,6 +1404,18 @@ class GameBoyTerminal:
         try:
             while True:
                 item = self.output_queue.get_nowait()
+                if item == "__proactive_next__":
+                    self._schedule_proactive()
+                    continue
+                if item == "__update_applied__":
+                    self._relaunch()
+                    continue
+                if isinstance(item, tuple) and item[0] == "__update_failed__":
+                    self.append_output("  BMO: update failed (%s) - staying on v%s. \u2665" % (item[1], self.APP_VERSION))
+                    continue
+                if isinstance(item, tuple) and item[0] == "__update_offer__":
+                    self._offer_update(item[1])
+                    continue
                 try:
                     self.append_output(item)
                 except Exception:
@@ -1106,7 +1486,7 @@ class GameBoyTerminal:
         self.append_output("  /\\_/\\")
         self.append_output("  ( o.o )")
         self.append_output("   > ^ <")
-        self.append_output("  BMO v2.2 - your GameBoy friend")
+        self.append_output(f"  BMO v{self.APP_VERSION} - your GameBoy friend")
         self.append_output("  ═══════════════════════")
         self.append_output("")
         name = self.memory.get("name")
