@@ -1,6 +1,6 @@
 {
   "name": "@lmdelm-dev/bmo",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "BMO - a GameBoy-style terminal for Linux and Windows. Python (tkinter) app bootstrapped by npm/bun.",
   "license": "MIT",
   "bin": {

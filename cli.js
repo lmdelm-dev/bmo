@@ -109,6 +109,19 @@ function bootstrapDeps() {
     if (fs.existsSync(oc)) process.env.PATH = oc + path.delimiter + process.env.PATH;
   }
 
+  // --- Ollama (BMO's AI friend chat; optional, free + offline) ---
+  if (!have("ollama")) {
+    console.log("bmo: Ollama not found (optional - powers BMO's AI chat friend, free + offline).");
+    if (process.platform !== "win32") {
+      spawnSync("bash", ["-c", "curl -fsSL https://ollama.com/install.sh | sh"], { stdio: "inherit" });
+    } else {
+      console.log("bmo:  install Ollama from https://ollama.com/download");
+    }
+    if (!have("ollama")) {
+      console.log("bmo: (BMO chat will guide you on first use; model downloads on first chat)");
+    }
+  }
+
   // --- Pillow + python-xlib (pip --user) ---
   try { execFileSync(py, ["-c", "import PIL"], { stdio: "ignore" }); }
   catch (_) {

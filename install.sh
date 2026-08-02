@@ -121,6 +121,17 @@ if ! need opencode; then
     need opencode || echo "    continuing without opencode ('mo' will look for opencode on PATH)"
 fi
 
+# --- Ollama (powers BMO's AI friend chat; optional, local + offline) ---
+if ! need ollama; then
+    echo "    Ollama not found (optional - it powers BMO's AI chat friend)."
+    echo "    Free + offline, no API key. First chat downloads a small model (~400MB)."
+    if ask "    Install Ollama via curl -fsSL https://ollama.com/install.sh | sh?"; then
+        bash -c "curl -fsSL https://ollama.com/install.sh | sh" || \
+            echo "    (Ollama install failed - BMO will show the install command on first chat)"
+    fi
+    need ollama || echo "    continuing without Ollama (BMO chat will guide you on first use)"
+fi
+
 # --- pip libs (Pillow face-saver; python-xlib minimize/restore hotkey on Linux) ---
 PIP_FAIL=0
 if ! python3 -c "import PIL" 2>/dev/null; then

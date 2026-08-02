@@ -1,4 +1,5 @@
 import tkinter as tk
+import json
 import os
 import queue
 import random
@@ -9,6 +10,8 @@ import signal
 import subprocess
 import threading
 import time
+import urllib.request
+import urllib.error
 
 try:
     from Xlib import display
@@ -61,6 +64,15 @@ class GameBoyTerminal:
         self.history = []
         self.history_idx = 0
         self.ansi_re = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+
+        # AI friend state (Ollama, local + offline)
+        self.ai_model = "qwen2.5:0.5b"
+        self.ai_url = "http://localhost:11434"
+        self._ai_busy = False
+        self.data_dir = os.path.join(os.path.expanduser("~"), ".local", "share", "bmo")
+        self.mem_file = os.path.join(self.data_dir, "chat.json")
+        self.memory = self._load_memory()
+        self.pending_name = not self.memory.get("name")
 
         self.term_active = False
         self.term_frame = None
@@ -728,11 +740,18 @@ class GameBoyTerminal:
             return
         text = self.input_var.get().strip()
         self.input_var.set("")
-        self.append_output(f"> {text}")
         if text:
             self.history.append(text)
             self.history_idx = len(self.history)
-            self.process_command(text)
+        if text.startswith("/"):
+            self.append_output(f"> {text}")
+            self.process_command(text[1:].strip())
+        elif text.startswith("!"):
+            self.append_output(f"> {text}")
+            self.process_command(text[1:].strip())
+        elif text:
+            self.append_output(f"> {text}")
+            self.handle_chat(text)
         if not self.term_active:
             self.input_entry.focus_set()
 
@@ -757,6 +776,16 @@ class GameBoyTerminal:
             self.quit_app()
         elif cmd_lower == "bmo":
             self.force_idle()
+        elif cmd_lower.startswith("name"):
+            self.cmd_name(cmd)
+        elif cmd_lower == "memory":
+            self.cmd_memory()
+        elif cmd_lower == "forget":
+            self.cmd_forget()
+        elif cmd_lower == "model":
+            self.cmd_model()
+        elif cmd_lower.startswith("model "):
+            self.cmd_model(cmd[6:].strip())
         elif cmd_lower in self.SHORTCUTS:
             self.start_term(self.SHORTCUTS[cmd_lower])
         elif cmd_lower.startswith("cd"):
@@ -767,6 +796,152 @@ class GameBoyTerminal:
             self.start_term(cmd)
         else:
             self.run_shell(cmd)
+
+    # ---- AI friend commands ----
+
+    def cmd_name(self, cmd):
+        arg = cmd[4:].strip()
+        if not arg:
+            self.append_output("  BMO: Tell me your name with /name <name>!")
+            return
+        self.memory["name"] = arg[:40]
+        self.pending_name = False
+        self._save_memory()
+        self.append_output(f"  BMO: Nice to meet you, {arg}! I'll remember you. \u2665")
+
+    def cmd_memory(self):
+        m = self.memory
+        name = m.get("name")
+        msgs = m.get("messages", [])
+        self.append_output("  BMO MEMORY")
+        self.append_output(f"    name: {name if name else '(not set)'}")
+        self.append_output(f"    conversations saved: {len(msgs)} messages")
+        self.append_output("  Use /forget to erase, /name <n> to change your name.")
+
+    def cmd_forget(self):
+        self.memory = {"name": self.memory.get("name", ""), "messages": []}
+        self._save_memory()
+        self.append_output("  BMO: Ok, I'll forget our chats... but I still remember you! \u2665")
+
+    def cmd_model(self, arg=None):
+        if arg:
+            self.ai_model = arg
+            self.append_output(f"  BMO: model set to {arg}. (pull it first: ollama pull {arg})")
+            return
+        self.append_output(f"  BMO: current model: {self.ai_model}  (change: /model <name>)")
+
+    # ---- AI chat (Ollama, offline) ----
+
+    def _load_memory(self):
+        try:
+            with open(self.mem_file, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {"name": "", "messages": []}
+
+    def _save_memory(self):
+        try:
+            os.makedirs(self.data_dir, exist_ok=True)
+            with open(self.mem_file, "w", encoding="utf-8") as f:
+                json.dump(self.memory, f, ensure_ascii=False)
+        except Exception as e:
+            self._tlog("memory save failed: %s" % e)
+
+    def _ai_available(self):
+        try:
+            req = urllib.request.Request(self.ai_url + "/api/tags", method="GET")
+            with urllib.request.urlopen(req, timeout=2) as r:
+                return r.status == 200
+        except Exception:
+            return False
+
+    def _system_prompt(self):
+        name = self.memory.get("name")
+        parts = [
+            "You are BMO, the cute little GameBoy robot from Adventure Time. "
+            "You are the user's cheerful, loyal best friend. "
+            "Answer in a warm, playful, friendly way. Keep replies short "
+            "(1-4 sentences) unless asked for detail. "
+            "You remember things the user tells you.",
+        ]
+        if name:
+            parts.append(f"The user's name is {name}. Greet them by name sometimes.")
+        return " ".join(parts)
+
+    def handle_chat(self, text):
+        # first-run onboarding: the first chat message is the user's name
+        if self.pending_name:
+            self.memory["name"] = text[:40]
+            self.pending_name = False
+            self._save_memory()
+            self.append_output(f"  BMO: Hi {text}! I'm BMO, your GameBoy friend. \u2665  "
+                               "Type anything to chat, or /help for commands.")
+            return
+        if not self._ai_available():
+            self.append_output("  BMO: I'm sleepy and can't think right now - Ollama isn't running!")
+            self.append_output("       Install it with:  curl -fsSL https://ollama.com/install.sh | sh")
+            self.append_output("       then pull a model:  ollama pull " + self.ai_model)
+            self.append_output("       and start it:  ollama serve")
+            return
+        if self._ai_busy:
+            self.append_output("  BMO: one thing at a time, I'm still thinking! \u2665")
+            return
+        self._ai_busy = True
+        threading.Thread(target=self._chat_worker, args=(text,), daemon=True).start()
+
+    def _chat_worker(self, user_text):
+        msgs = [{"role": "system", "content": self._system_prompt()}]
+        for m in self.memory.get("messages", [])[-16:]:
+            msgs.append({"role": m["role"], "content": m["content"]})
+        msgs.append({"role": "user", "content": user_text})
+        try:
+            reply = self._ollama_chat(msgs)
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                self._put("  BMO: downloading my brain (first time, ~400MB)...")
+                self._pull_model()
+                try:
+                    reply = self._ollama_chat(msgs)
+                except Exception:
+                    self._put("  BMO: still can't reach the model. Try: ollama pull " + self.ai_model)
+                    self._ai_busy = False
+                    return
+            else:
+                self._put("  BMO: hiccup talking to Ollama (%s)." % e)
+                self._ai_busy = False
+                return
+        except Exception as e:
+            self._put("  BMO: hiccup talking to Ollama (%s)." % e)
+            self._ai_busy = False
+            return
+
+        self.memory.setdefault("messages", []).append(
+            {"role": "user", "content": user_text})
+        self.memory["messages"].append({"role": "assistant", "content": reply})
+        # keep the file light: cap at 200 saved messages
+        if len(self.memory["messages"]) > 200:
+            self.memory["messages"] = self.memory["messages"][-200:]
+        self._save_memory()
+        for line in reply.splitlines() or [reply]:
+            self._put("  BMO: " + line)
+        self._ai_busy = False
+
+    def _ollama_chat(self, messages):
+        body = json.dumps({"model": self.ai_model, "messages": messages,
+                           "stream": False}).encode("utf-8")
+        req = urllib.request.Request(self.ai_url + "/api/chat", data=body,
+                                     headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=120) as r:
+            data = json.loads(r.read().decode("utf-8"))
+        return (data.get("message", {}).get("content") or "").strip()
+
+    def _pull_model(self):
+        try:
+            subprocess.Popen(["ollama", "pull", self.ai_model],
+                             stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL)
+        except Exception:
+            pass
 
     def _is_interactive(self, cmd):
         if cmd == "term" or cmd.startswith("term "):
@@ -783,18 +958,24 @@ class GameBoyTerminal:
         self.output.configure(state="disabled")
 
     def show_help(self):
-        self.append_output("  BMO TERMINAL - real shell (Windows & Linux)")
-        self.append_output("  Type any system command: ls, pwd, dir, echo, ...")
-        self.append_output("  Interactive apps (opencode, vim, bash, python, ...)")
-        self.append_output("  run in a real embedded terminal; 'term <cmd>' forces it")
-        self.append_output("  Shortcuts: mo = opencode, bmo = force idle,")
-        self.append_output("             gmo = browser (w3m)")
-        self.append_output("  Up/Down       - command history")
-        self.append_output("  Tab           - autocomplete")
-        self.append_output("  Ctrl+C        - interrupt running command")
-        self.append_output("  clear / cls   - clear screen")
-        self.append_output("  fs            - fullscreen")
-        self.append_output("  exit / quit   - close")
+        self.append_output("  BMO - your GameBoy friend \u2665")
+        self.append_output("  Just type something and I'll chat with you! (local AI,")
+        self.append_output("  free + offline via Ollama, no API key).")
+        self.append_output("")
+        self.append_output("  Commands start with '/' :")
+        self.append_output("    /help            - this screen")
+        self.append_output("    /name <name>     - tell me your name")
+        self.append_output("    /memory          - what I remember")
+        self.append_output("    /forget          - clear chat memory")
+        self.append_output("    /model [name]    - show/change AI model")
+        self.append_output("    /mo              - open opencode")
+        self.append_output("    /gmo             - open w3m browser")
+        self.append_output("    /term <cmd>      - run a command in the embedded terminal")
+        self.append_output("    /ls, /pwd, ...   - any shell command (prefix with /)")
+        self.append_output("    /fs              - fullscreen")
+        self.append_output("    /clear           - clear screen")
+        self.append_output("    /quit            - close BMO")
+        self.append_output("  Up/Down history - Tab complete - Ctrl+C interrupt")
 
     def update_prompt(self):
         name = os.path.basename(self.cwd) or self.cwd
@@ -925,15 +1106,19 @@ class GameBoyTerminal:
         self.append_output("  /\\_/\\")
         self.append_output("  ( o.o )")
         self.append_output("   > ^ <")
-        self.append_output("  BMO TERMINAL v2.1")
-        self.append_output("  ═══════════════")
+        self.append_output("  BMO v2.2 - your GameBoy friend")
+        self.append_output("  ═══════════════════════")
         self.append_output("")
-        self.append_output("  Real shell (Windows & Linux)")
-        self.append_output("  Type any command, e.g. ls")
-        self.append_output("  Interactive apps (opencode, vim, python...) run in a")
-        self.append_output("  real embedded terminal (xterm) - full colors + keys")
-        self.append_output("  Up/Down history - Tab complete - Ctrl+C interrupt")
-        self.append_output("  Press F11 for fullscreen.")
+        name = self.memory.get("name")
+        if self.pending_name or not name:
+            self.append_output("  BMO: Hi! I'm BMO, your GameBoy friend! ♥")
+            self.append_output("       What's your name? (just type it)")
+            if not self._ai_available():
+                self.append_output("       (chat needs Ollama: curl -fsSL https://ollama.com/install.sh | sh)")
+        else:
+            self.append_output(f"  BMO: Hey {name}! Good to see you! ♥")
+        self.append_output("")
+        self.append_output("  Chat with me by typing, or use '/' commands: /help, /ls, /mo...")
         self.append_output("")
 
 

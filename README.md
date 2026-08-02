@@ -19,6 +19,25 @@ The installer checks for these and installs any that are missing for you
 - `xterm` (Linux, optional - the embedded interactive terminal)
 - `opencode` (optional - powers the `mo` command; installed via
   `curl -fsSL https://opencode.ai/install | bash`)
+- `Ollama` (optional - powers BMO's **AI chat friend**; free + offline, no API
+  key; the installer offers `curl -fsSL https://ollama.com/install.sh | sh`)
+
+## AI chat friend
+
+BMO is not just a terminal - it's a friend. Just type something and it chats
+back (a small local model, fully offline, no API key, nothing leaves your
+machine):
+
+```sh
+hello!
+```
+
+- **Memory**: BMO asks your name on first launch and remembers you - your name
+  and your conversations are saved in `~/.local/share/bmo/chat.json`.
+- **Commands** are prefixed with `/`. Anything without a `/` is chat.
+- First chat auto-downloads a small model (`qwen2.5:0.5b`, ~400MB) via Ollama.
+- `/help`, `/name <n>`, `/memory`, `/forget`, `/model [name]` manage the friend
+  features.
 
 ## Install
 
@@ -73,13 +92,13 @@ Install [Python](https://python.org) (tick "Add python.exe to PATH", plus
 
 ## Usage
 
-- Type any command: `ls`, `pwd`, `echo hi`, ...
-- `mo` runs opencode, `gmo` opens w3m
-- Interactive apps (`python`, `vim`, `bash`, ...) open in an embedded terminal
-- `fs` or the yellow **FS** button toggles fullscreen
+- Just **type** and BMO chats with you (local AI, free + offline)
+- **Commands start with `/`**: `/ls`, `/pwd`, `/mo` (opencode), `/gmo` (w3m),
+  `/fs` (fullscreen), `/clear`, `/quit`, `/help`
+- `/name <name>` - tell BMO your name, `/memory` - what it remembers,
+  `/forget` - clear memory, `/model [name]` - change the AI model
 - The blue **_** button minimizes; on Linux bring it back with **Ctrl+Alt+B**
 - The red **X** button closes BMO
-- `bmo` / `bmo --help`... type `help` inside BMO for more
 - After 60s idle, BMO falls asleep (blinks; move mouse or press a key to wake)
 
 ## Packaging notes for maintainers
