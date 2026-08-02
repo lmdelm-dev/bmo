@@ -1,141 +1,89 @@
-# BMO
+# BMO ♥
 
-A GameBoy-style terminal. Cute BMO face, round buttons, Blue Water logo font,
-a real shell, embedded terminals, and an idle screen-saver where BMO blinks and
-looks around.
+A cute GameBoy friend that lives on your desktop.
 
-- **Linux** and **Windows**
-- Double-click to launch (desktop entry on Linux, `.pyw` on Windows)
-- Install via **curl | npm | bun | brew**
+Say hi and BMO **talks back** - it's a real AI friend that remembers you, chats
+with you, runs commands, and even speaks up on its own once in a while.
 
-## Requirements
-
-The installer checks for these and installs any that are missing for you
-(it uses each tool's own one-liner - no manual steps):
-
-- Python 3 with `tkinter` (system package)
-- `Pillow` (optional - BMO's face saver)
-- `python-xlib` (Linux, optional - minimize/restore hotkey)
-- `xterm` (Linux, optional - the embedded interactive terminal)
-- `opencode` (optional - powers the `mo` command; installed via
-  `curl -fsSL https://opencode.ai/install | bash`)
-- `Ollama` (optional - powers BMO's **AI chat friend**; free + offline, no API
-  key; the installer offers `curl -fsSL https://ollama.com/install.sh | sh`)
-
-## AI chat friend
-
-BMO is not just a terminal - it's a friend. Just type something and it chats
-back (a small local model, fully offline, no API key, nothing leaves your
-machine):
-
-```sh
-hello!
+```
+  /\_/\
+  ( o.o )
+   > ^ <
 ```
 
-- **Memory**: BMO asks your name on first launch and remembers you - your name
-  and your conversations are saved in `~/.local/share/bmo/chat.json`.
-- **Commands** are prefixed with `/`. Anything without a `/` is chat.
-- First chat auto-downloads a small model (`qwen2.5:0.5b`, ~400MB) via Ollama.
-- `/help`, `/name <n>`, `/memory`, `/forget`, `/model [name]` manage the friend
-  features.
+> *"Hello! I'm BMO, your GameBoy friend!"*
+
+## Why BMO is great
+
+- 🧠 **A real AI friend** - fully local & offline (via Ollama), free, no API key,
+  nothing leaves your machine
+- 💭 **Remembers you** - your name and what you tell it (`~/.local/share/bmo/chat.json`)
+- 💬 **Talks first** sometimes, asking about things you've mentioned ("so you like
+  hiking? tell me more!")
+- ฅ(=`ω`=)ฅ **Cat loading animation** while it thinks
+- 😴 **Falls asleep** after 2 minutes of quiet (cute sleep face!) - wake it with a
+  mouse move or any key
+- 🐚 **A real terminal** - run commands, `/mo` opens opencode, `/gmo` opens w3m
+- 🔄 **Self-updates** from GitHub (silently checks, asks before updating)
 
 ## Install
 
-### curl (Linux / macOS)
-
+**curl (Linux / macOS):**
 ```sh
 curl -fsSL https://raw.githubusercontent.com/lmdelm-dev/bmo/main/install.sh | bash
 ```
 
-Installs to `~/.local/share/bmo`, adds a `bmo` command, a desktop entry, and the
-Blue Water logo font. It also bootstraps any missing dependencies (Python 3 +
-tkinter, Pillow, python-xlib, xterm, opencode) using their standard installers.
-Run it with `bmo` or from your app menu.
-
-### npm
-
+**npm / bun:**
 ```sh
-npm install -g @lmdelm-dev/bmo
-bmo
+npm install -g @lmdelm-dev/bmo && bmo
+# or
+bun add -g @lmdelm-dev/bmo && bmo
 ```
 
-### bun
-
-```sh
-bun add -g @lmdelm-dev/bmo
-bmo
-```
-
-### brew (macOS / Linux)
-
+**Homebrew:**
 ```sh
 brew tap lmdelm-dev/tap https://github.com/lmdelm-dev/homebrew-tap
 brew install bmo
 ```
 
-### From source
+**Windows:** install [Python](https://python.org) (with `tkinter`), then
+double-click `bmo.pyw` or run `bmo.bat`.
 
+**From source:**
 ```sh
 git clone https://github.com/lmdelm-dev/bmo.git
 cd bmo
 ./bmo
 ```
 
-### Windows
+## Using BMO
 
-Install [Python](https://python.org) (tick "Add python.exe to PATH", plus
-`tkinter`), then:
+- **Just type** anything and BMO chats with you ♥
+- **Commands** start with `/`:
 
-- Double-click `bmo.pyw`, **or**
-- Open a terminal and run `bmo.bat`, **or**
-- `npm install -g @lmdelm-dev/bmo && bmo`
+| command | does |
+| --- | --- |
+| `/help` | show all commands |
+| `/name <n>` | tell BMO your name |
+| `/memory` | what BMO remembers |
+| `/forget` | forget everything |
+| `/model [name]` | change the AI model |
+| `/ls`, `/pwd`, ... | run any shell command |
+| `/mo`, `/gmo` | open opencode / w3m |
+| `/fs`, `/clear`, `/quit` | fullscreen / clear / quit |
 
-## Usage
+- The blue **_** button minimizes (bring it back with **Ctrl+Alt+B**), the red **X** closes BMO
+- Idle for **2 minutes** and BMO falls asleep - just move the mouse or press a key to wake it up
 
-- Just **type** and BMO chats with you (local AI, free + offline)
-- **Commands start with `/`**: `/ls`, `/pwd`, `/mo` (opencode), `/gmo` (w3m),
-  `/fs` (fullscreen), `/clear`, `/quit`, `/help`
-- `/name <name>` - tell BMO your name, `/memory` - what it remembers,
-  `/forget` - clear memory, `/model [name]` - change the AI model
-- The blue **_** button minimizes; on Linux bring it back with **Ctrl+Alt+B**
-- The red **X** button closes BMO
-- After 60s idle, BMO falls asleep (blinks; move mouse or press a key to wake)
+> **First chat?** BMO downloads a small model (`qwen2.5:0.5b`, ~400MB) once via
+> Ollama, then everything is free and offline forever.
 
-## Packaging notes for maintainers
+## For maintainers
 
-- `install.sh` - the curl installer (`BMO_REPO`/`BMO_BRANCH` env vars override the source)
-- `package.json` + `cli.js` - the npm/bun package (`@lmdelm-dev/bmo`)
-- `Formula/bmo.rb` - Homebrew formula (lives in the `lmdelm-dev/homebrew-tap` repo)
-- `scripts/release.sh` - fills the real tarball sha256 into the Formula
-- `.github/workflows/ci.yml` - lint checks on push, checksum verification on tags
-
-### Release checklist (publish a new version)
-
-```sh
-# 1. commit your changes, then create the tag
-git add -A
-git commit -m "My change"
-git tag v0.1.0          # bump versions in package.json and Formula too
-
-# 2. push the repo and the tag
-git remote add origin https://github.com/lmdelm-dev/bmo.git
-git push -u origin main
-git push origin v0.1.0
-
-# 3. now that the tarball exists on GitHub, get the real checksum:
-./scripts/release.sh v0.1.0   # prints the sha256 and updates Formula/bmo.rb
-```
-
-> Note: a tag commit cannot contain its own tarball checksum (it would change the
-> tarball). The computed sha256 must live in the **Homebrew tap repo**
-> (a separate git repo), which `scripts/release.sh` produces for you.
-
-After that:
-- **npm / bun**: `npm publish` (must be run from a machine logged into npm; requires an npm account with `@lmdelm-dev` scope access).
-- **Homebrew**: push the updated `Formula/bmo.rb` to the `lmdelm-dev/homebrew-tap` repo; `brew install bmo` then works.
-
-CI lints on push, and on each tag it re-packages the GitHub tarball to confirm it
-builds.
+- `install.sh` - the curl installer
+- `package.json` + `cli.js` - the npm/bun package
+- `Formula/bmo.rb` - Homebrew formula
+- `scripts/release.sh` + `.github/workflows/ci.yml` - release checksums + CI
 
 ## License
 
