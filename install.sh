@@ -7,6 +7,7 @@
 #   - Python 3 + tkinter   (system package)
 #   - Pillow, python-xlib, vosk, piper-tts  (pip --user)
 #   - espeak-ng             (system package; BMO's backup voice)
+#   - sox                   (system package; pitch-shifts Piper into BMO's kid voice)
 #   - opencode              (curl -fsSL https://opencode.ai/install | bash)
 #   - xterm                 (system package; powers BMO's embedded terminal)
 #   - the Blue Water font   (shipped, fc-cache)
@@ -123,6 +124,24 @@ fi
 if [ "$(uname -s)" = "Darwin" ] && ! need espeak-ng && ! need espeak; then
     echo "    installing espeak (BMO's voice) via Homebrew..."
     brew install espeak 2>/dev/null || echo "    (espeak install failed - text-only for now)"
+fi
+
+# --- sox (pitch-shifts Piper into BMO's little-kid voice) ---
+if [ "$(uname -s)" = "Linux" ] && ! need sox; then
+    echo "    sox is missing (makes BMO's human voice sound like a little kid)."
+    if ask "    Install sox now?"; then
+        if need apt-get; then sudo apt-get install -y sox
+        elif need zypper; then sudo zypper install -y sox
+        elif need dnf; then sudo dnf install -y sox
+        elif need pacman; then sudo pacman -S --noconfirm sox
+        else echo "    (could not auto-install sox - BMO will keep its normal voice)"
+        fi
+    fi
+    need sox || echo "    continuing without sox (BMO uses its normal voice; /voice kid off)"
+fi
+if [ "$(uname -s)" = "Darwin" ] && ! need sox; then
+    echo "    installing sox via Homebrew (BMO's little-kid voice)..."
+    brew install sox 2>/dev/null || echo "    (sox install failed - BMO keeps its normal voice)"
 fi
 
 # --- opencode (powers the 'mo' command) ---

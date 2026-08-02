@@ -87,6 +87,11 @@ class GameBoyTerminal:
             self.voice_pitch = 60
             self.voice_speed = 155
         self.voice_variant = self.memory.get("voice_variant", "en-us+f2")
+        self.voice_kid = bool(self.memory.get("voice_kid", True))
+        try:
+            self.voice_kid_cents = max(0, min(1200, int(self.memory.get("voice_kid_cents", 400))))
+        except Exception:
+            self.voice_kid_cents = 400
         self._piper_voice = None
         self._speak_queue = queue.Queue()
         self._speak_thread = None
@@ -1179,26 +1184,39 @@ class GameBoyTerminal:
             player = self._piper_player()
             if not player:
                 return
+            sox = None
+            if self.voice_kid and shutil.which("sox"):
+                cents = max(0, min(1200, int(self.voice_kid_cents)))
+                sox = subprocess.Popen(
+                    ["sox", "-t", "raw", "-r", str(rate), "-e", "signed", "-b", "16", "-c", "1", "-",
+                     "-t", "raw", "-r", str(rate), "-e", "signed", "-b", "16", "-c", "1", "-",
+                     "pitch", "+%d" % cents],
+                    stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                    stderr=subprocess.DEVNULL)
             p = subprocess.Popen([player, "-q", "-f", "S16_LE", "-r", str(rate), "-c", "1"],
-                                 stdin=subprocess.PIPE,
+                                 stdin=sox.stdout if sox else subprocess.PIPE,
                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if sox:
+                sox.stdout.close()
             try:
+                src = sox.stdin if sox else p.stdin
                 for chunk in v.synthesize(text):
-                    p.stdin.write(chunk.audio_int16_bytes
-                                  if hasattr(chunk, "audio_int16_bytes") else chunk)
+                    src.write(chunk.audio_int16_bytes
+                              if hasattr(chunk, "audio_int16_bytes") else chunk)
             except (BrokenPipeError, OSError):
                 pass
             try:
-                p.stdin.close()
+                (sox.stdin if sox else p.stdin).close()
             except Exception:
                 pass
-            try:
-                p.wait(timeout=60)
-            except Exception:
+            for proc in ([sox, p] if sox else [p]):
                 try:
-                    p.kill()
+                    proc.wait(timeout=60)
                 except Exception:
-                    pass
+                    try:
+                        proc.kill()
+                    except Exception:
+                        pass
         except Exception:
             pass
 
@@ -1241,12 +1259,34 @@ class GameBoyTerminal:
             self.memory["voice_variant"] = self.voice_variant
             self._save_memory()
             self.append_output(f"  BMO: voice variant set to {self.voice_variant}. (/voice test) \u2665")
+        elif parts and parts[0] == "kid" and len(parts) > 1:
+            sub = parts[1].strip().lower()
+            if sub in ("on", "off"):
+                self.voice_kid = (sub == "on")
+                self.memory["voice_kid"] = self.voice_kid
+                self._save_memory()
+                self.append_output(f"  BMO: kid voice {'on' if self.voice_kid else 'off'}! (/voice test) \u2665")
+            else:
+                try:
+                    self.voice_kid_cents = max(0, min(1200, int(sub)))
+                    self.memory["voice_kid_cents"] = self.voice_kid_cents
+                    self._save_memory()
+                    self.append_output(f"  BMO: kid voice shift set to {self.voice_kid_cents} cents. (/voice test) \u2665")
+                except Exception:
+                    self.append_output("  BMO: /voice kid on|off|<cents 0-1200> (higher = smaller voice!)")
+        elif a == "kid":
+            self.voice_kid = not self.voice_kid
+            self.memory["voice_kid"] = self.voice_kid
+            self._save_memory()
+            self.append_output(f"  BMO: kid voice {'on' if self.voice_kid else 'off'}! (/voice test) \u2665")
         else:
             state = "on" if self.voice_on else "off"
-            self.append_output(f"  BMO: voice {state} | {self.voice_variant} | pitch {self.voice_pitch} | {self.voice_speed} wpm")
+            kid = "kid" if self.voice_kid else "adult"
+            self.append_output(f"  BMO: voice {state} | {kid} (+{self.voice_kid_cents}c) | {self.voice_variant} | pitch {self.voice_pitch} | {self.voice_speed} wpm")
             self.append_output("    languages: English, Arabic, Français, Español")
             self.append_output("    /voice on|off|test   /voice pitch <0-99>")
             self.append_output("    /voice speed <80-450>   /voice variant <name>")
+            self.append_output("    /voice kid on|off|<cents>")
 
     def _vosk_dir(self):
         return os.path.join(self.data_dir, "vosk-model")
@@ -1876,7 +1916,7 @@ class GameBoyTerminal:
 
     # ---- auto-updater (checks GitHub, installs if the user agrees) ----
 
-    APP_VERSION = "2.19"
+    APP_VERSION = "2.20"
     UPDATE_URL = "https://raw.githubusercontent.com/lmdelm-dev/bmo/main/gameboy.py"
     UPDATE_TARBALL = "https://codeload.github.com/lmdelm-dev/bmo/tar.gz/refs/heads/main"
 
