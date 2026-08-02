@@ -80,6 +80,13 @@ class GameBoyTerminal:
         self.pending_confirm = None
 
         self.voice_on = bool(self.memory.get("voice", True))
+        try:
+            self.voice_pitch = max(0, min(99, int(self.memory.get("voice_pitch", 80))))
+            self.voice_speed = max(80, min(450, int(self.memory.get("voice_speed", 150))))
+        except Exception:
+            self.voice_pitch = 80
+            self.voice_speed = 150
+        self.voice_variant = self.memory.get("voice_variant", "en-us+f3")
         self._speak_queue = queue.Queue()
         self._speak_thread = None
         self._voice_lock = threading.Lock()
@@ -1051,7 +1058,7 @@ class GameBoyTerminal:
         return self._tts_bin() is not None
 
     def _clean_speech(self, text):
-        t = re.sub(r"^BMO:\s*", "", text)
+        t = re.sub(r"^\s*BMO:\s*", "", text)
         t = re.sub(r"\u2588", "", t)
         t = re.sub(r"[*_`#>|]", "", t)
         t = re.sub(r"https?://\S+|www\.\S+", " link ", t)
@@ -1085,7 +1092,9 @@ class GameBoyTerminal:
                 clean = self._clean_speech(text)
                 if not clean:
                     return
-                subprocess.run([bin_, "-v", "en-us", "-p", "70", "-s", "155", clean],
+                subprocess.run([bin_, "-v", self.voice_variant,
+                                "-p", str(self.voice_pitch),
+                                "-s", str(self.voice_speed), clean],
                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                timeout=120)
         except Exception:
@@ -1093,6 +1102,7 @@ class GameBoyTerminal:
 
     def cmd_voice(self, arg=""):
         a = (arg or "").strip().lower()
+        parts = a.split(None, 1)
         if a == "off":
             self.voice_on = False
             self.memory["voice"] = False
@@ -1108,9 +1118,32 @@ class GameBoyTerminal:
             self.voice_on = True
             self.append_output("  BMO: Testing, testing, 1 2 3! Can you hear me? \u2665")
             self.voice_on = was
+        elif parts and parts[0] == "pitch" and len(parts) > 1:
+            try:
+                self.voice_pitch = max(0, min(99, int(parts[1])))
+                self.memory["voice_pitch"] = self.voice_pitch
+                self._save_memory()
+                self.append_output(f"  BMO: my pitch is now {self.voice_pitch}. (/voice test) \u2665")
+            except Exception:
+                self.append_output("  BMO: pitch needs a number 0-99 (higher = squeakier!)")
+        elif parts and parts[0] == "speed" and len(parts) > 1:
+            try:
+                self.voice_speed = max(80, min(450, int(parts[1])))
+                self.memory["voice_speed"] = self.voice_speed
+                self._save_memory()
+                self.append_output(f"  BMO: my speed is now {self.voice_speed} wpm. (/voice test) \u2665")
+            except Exception:
+                self.append_output("  BMO: speed needs a number 80-450")
+        elif parts and parts[0] == "variant" and len(parts) > 1:
+            self.voice_variant = parts[1].strip()
+            self.memory["voice_variant"] = self.voice_variant
+            self._save_memory()
+            self.append_output(f"  BMO: voice variant set to {self.voice_variant}. (/voice test) \u2665")
         else:
             state = "on" if self.voice_on else "off"
-            self.append_output(f"  BMO: voice is {state}.  (/voice on|off|test)")
+            self.append_output(f"  BMO: voice {state} | {self.voice_variant} | pitch {self.voice_pitch} | {self.voice_speed} wpm")
+            self.append_output("    /voice on|off|test   /voice pitch <0-99>")
+            self.append_output("    /voice speed <80-450>   /voice variant <name>")
 
     def _vosk_dir(self):
         return os.path.join(self.data_dir, "vosk-model")
@@ -1693,7 +1726,7 @@ class GameBoyTerminal:
 
     # ---- auto-updater (checks GitHub, installs if the user agrees) ----
 
-    APP_VERSION = "2.11"
+    APP_VERSION = "2.12"
     UPDATE_URL = "https://raw.githubusercontent.com/lmdelm-dev/bmo/main/gameboy.py"
     UPDATE_TARBALL = "https://codeload.github.com/lmdelm-dev/bmo/tar.gz/refs/heads/main"
 
@@ -1821,6 +1854,7 @@ class GameBoyTerminal:
         self.append_output("    /forget          - clear chat memory")
         self.append_output("    /model [name]    - show/change AI model")
         self.append_output("    /voice on|off    - BMO talks out loud (hold MIC to talk to him)")
+        self.append_output("    /voice test      - hear my voice (pitch/speed/variant to tune it)")
         self.append_output("    /talk on|off     - BMO chats on his own")
         self.append_output("    /update now      - check for updates")
         self.append_output("    /mo              - open opencode")
