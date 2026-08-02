@@ -1184,7 +1184,8 @@ class GameBoyTerminal:
                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             try:
                 for chunk in v.synthesize(text):
-                    p.stdin.write(chunk)
+                    p.stdin.write(chunk.audio_int16_bytes
+                                  if hasattr(chunk, "audio_int16_bytes") else chunk)
             except (BrokenPipeError, OSError):
                 pass
             try:
@@ -1855,7 +1856,7 @@ class GameBoyTerminal:
 
     # ---- auto-updater (checks GitHub, installs if the user agrees) ----
 
-    APP_VERSION = "2.15"
+    APP_VERSION = "2.16"
     UPDATE_URL = "https://raw.githubusercontent.com/lmdelm-dev/bmo/main/gameboy.py"
     UPDATE_TARBALL = "https://codeload.github.com/lmdelm-dev/bmo/tar.gz/refs/heads/main"
 
