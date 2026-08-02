@@ -82,10 +82,10 @@ class GameBoyTerminal:
         self.voice_on = bool(self.memory.get("voice", True))
         try:
             self.voice_pitch = max(0, min(99, int(self.memory.get("voice_pitch", 80))))
-            self.voice_speed = max(80, min(450, int(self.memory.get("voice_speed", 150))))
+            self.voice_speed = max(80, min(450, int(self.memory.get("voice_speed", 170))))
         except Exception:
             self.voice_pitch = 80
-            self.voice_speed = 150
+            self.voice_speed = 170
         self.voice_variant = self.memory.get("voice_variant", "en-us+f3")
         self._speak_queue = queue.Queue()
         self._speak_thread = None
@@ -1066,6 +1066,25 @@ class GameBoyTerminal:
         t = re.sub(r"\s+", " ", t)
         return t.strip()
 
+    _VOICES = {
+        "en": "en-us+f3",
+        "ar": "ar+f2",
+        "fr": "fr+f3",
+        "es": "es+f3",
+    }
+
+    def _detect_lang(self, text):
+        if re.search(r"[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]", text):
+            return "ar"
+        t = text.lower()
+        if (re.search(r"[ñ¿¡áíóúü]", text) or
+                re.search(r"\b(hola|gracias|amigo|qué|cómo|está|por|para|una|bienvenido|juego|hasta|también|buenos|noche|días)\b", t)):
+            return "es"
+        if (re.search(r"[àâçéèêëîïôùûœæ]", text) or
+                re.search(r"\b(bonjour|merci|comment|salut|oui|non|pour|avec|très|j'aime|vous|mon|ma|mes)\b", t)):
+            return "fr"
+        return "en"
+
     def _speak(self, text, force=False):
         if not force and not self.voice_on:
             return
@@ -1092,7 +1111,9 @@ class GameBoyTerminal:
                 clean = self._clean_speech(text)
                 if not clean:
                     return
-                subprocess.run([bin_, "-v", self.voice_variant,
+                lang = self._detect_lang(clean)
+                voice = self.voice_variant if lang == "en" else self._VOICES.get(lang, self.voice_variant)
+                subprocess.run([bin_, "-v", voice,
                                 "-p", str(self.voice_pitch),
                                 "-s", str(self.voice_speed), clean],
                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
@@ -1142,6 +1163,7 @@ class GameBoyTerminal:
         else:
             state = "on" if self.voice_on else "off"
             self.append_output(f"  BMO: voice {state} | {self.voice_variant} | pitch {self.voice_pitch} | {self.voice_speed} wpm")
+            self.append_output("    languages: English, Arabic, Français, Español")
             self.append_output("    /voice on|off|test   /voice pitch <0-99>")
             self.append_output("    /voice speed <80-450>   /voice variant <name>")
 
@@ -1726,7 +1748,7 @@ class GameBoyTerminal:
 
     # ---- auto-updater (checks GitHub, installs if the user agrees) ----
 
-    APP_VERSION = "2.12"
+    APP_VERSION = "2.13"
     UPDATE_URL = "https://raw.githubusercontent.com/lmdelm-dev/bmo/main/gameboy.py"
     UPDATE_TARBALL = "https://codeload.github.com/lmdelm-dev/bmo/tar.gz/refs/heads/main"
 

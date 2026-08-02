@@ -21,8 +21,9 @@ with you, runs commands, and even speaks up on its own once in a while.
 - 💬 **Talks first** sometimes, asking about things you've mentioned ("so you like
   hiking? tell me more!")
 - ฅ(=`ω`=)ฅ **Cat loading animation** while it thinks
-- 🗣️ **Has a voice** - BMO *speaks* out loud (espeak-ng), and you can talk back
-  by **holding the pink MIC button** (vosk, offline speech-to-text) ♥
+- 🗣️ **Has a voice** - BMO *speaks* out loud (espeak-ng) in **English, Arabic,
+  French and Spanish** - it auto-picks the language of what it's saying! You can
+  talk back by **holding the pink MIC button** (vosk, offline speech-to-text) ♥
 - 😴 **Falls asleep** after 2 minutes of quiet (cute sleep face!) - wake it with a
   mouse move or any key
 - 🐚 **A real terminal** - run commands, `/mo` opens opencode, `/gmo` opens w3m
