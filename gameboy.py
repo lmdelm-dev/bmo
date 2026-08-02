@@ -109,6 +109,9 @@ class GameBoyTerminal:
         self.proactive_on = True
         self._schedule_proactive()
         self._update_declined = None
+        self._thinking = False
+        self._thinking_job = None
+        self._thinking_frame = 0
         self.root.after(15000, self._start_update_check)
         self.root.mainloop()
 
@@ -242,7 +245,8 @@ class GameBoyTerminal:
         if not _HAS_PIL:
             return
         files = {"normal": "face.png", "blink": "blink.png",
-                 "left": "face_left.jpg", "right": "face_right.jpg"}
+                 "left": "face_left.jpg", "right": "face_right.jpg",
+                 "sleep": "sleep.png"}
         for key, fn in files.items():
             path = os.path.join(self.imagedir, fn)
             if os.path.exists(path):
@@ -275,14 +279,13 @@ class GameBoyTerminal:
         if self.saver_active:
             return
         self.saver_active = True
-        self.saver_state = "normal"
+        self.saver_state = "sleep"
+        self._blinks_left = 0
         self.append_output("  BMO fell asleep... move mouse or press a key to wake up.")
         self.saver_canvas.place(x=0, y=0, relwidth=1, relheight=1)
         self.saver_canvas.focus_set()
         self.root.update_idletasks()
         self.show_saver_image()
-        self.schedule_blink()
-        self.schedule_orientation()
 
     def exit_saver(self, event=None):
         if not self.saver_active:
@@ -295,36 +298,54 @@ class GameBoyTerminal:
         self.root.after_idle(self.force_focus)
 
     def schedule_blink(self):
-        self._schedule_saver_job(random.randint(1000, 3000), self.do_blink)
+        self._schedule_saver_job(random.randint(300, 2000), self.do_blink)
 
     def do_blink(self):
         if not self.saver_active:
             return
-        if self.saver_state == "normal":
+        self._blinks_left = random.randint(1, 2)
+        self._next_blink()
+
+    def _next_blink(self):
+        if not self.saver_active:
+            return
+        if self._blinks_left > 0:
+            self._blinks_left -= 1
             self.show_saver_image(blink=True)
-            self._schedule_saver_job(180, self.end_blink)
-        self.schedule_blink()
+            self._schedule_saver_job(150, self.end_blink)
+            self._schedule_saver_job(random.randint(300, 2000), self._next_blink)
+        else:
+            self.schedule_blink()
 
     def end_blink(self):
         if self.saver_active:
             self.show_saver_image()
 
     def schedule_orientation(self):
-        self._schedule_saver_job(random.randint(120000, 300000), self.change_orientation)
+        self._schedule_saver_job(random.randint(1000, 3000), self.do_look)
 
-    def change_orientation(self):
+    def do_look(self):
         if not self.saver_active:
             return
-        self.saver_state = random.choice(["normal", "left", "right"])
-        self.show_saver_image()
+        self.show_saver_image(look=random.choice(["left", "right", "normal"]))
+        self._schedule_saver_job(500, self.end_look)
         self.schedule_orientation()
 
-    def show_saver_image(self, blink=False):
+    def end_look(self):
+        if self.saver_active:
+            self.show_saver_image()
+
+    def show_saver_image(self, blink=False, look=None):
         cw = self.saver_canvas.winfo_width()
         ch = self.saver_canvas.winfo_height()
         if cw < 10 or ch < 10:
             return
-        key = "blink" if blink else (self.saver_state or "normal")
+        if look:
+            key = look
+        elif blink:
+            key = "blink"
+        else:
+            key = self.saver_state or "normal"
         img = self.images.get(key) or self.images.get("normal")
         if img is None:
             return
@@ -341,8 +362,8 @@ class GameBoyTerminal:
         self.saver_canvas.create_image(cw / 2, ch / 2, image=self._saver_photo)
 
     def check_idle(self):
-        if (not self.saver_active and not self.term_active
-                and (time.time() - self.last_activity) >= 60):
+        if (not self.saver_active and not self.term_active and not self._thinking
+                and (time.time() - self.last_activity) >= 120):
             self.start_saver()
         self.root.after(1000, self.check_idle)
 
@@ -751,6 +772,7 @@ class GameBoyTerminal:
         if text:
             self.history.append(text)
             self.history_idx = len(self.history)
+            self.register_activity()
         if text.startswith("/"):
             self.append_output(f"> {text}")
             self.process_command(text[1:].strip())
@@ -768,6 +790,65 @@ class GameBoyTerminal:
         self.output.insert("end", text + "\n")
         self.output.see("end")
         self.output.configure(state="disabled")
+
+    _THINKING_FRAMES = [
+        "  \u0e1f(=\u03c9=)\u0e1f thinking.",
+        "  \u0e1f(=\u03c9=)\u0e1f thinking..",
+        "  \u0e1f(=\u03c9=)\u0e1f thinking...",
+        "  \u0e1f(=\uff61=)\u0e1f thinking..",
+        "  \u0e1f(=^-^=)\u0e1f thinking.",
+    ]
+
+    def _start_thinking(self):
+        self._stop_thinking()
+        self._thinking = True
+        self._thinking_frame = 0
+        self._tick_thinking()
+
+    def _thinking_line(self):
+        try:
+            idx = self.output.search("\u0e1f(", "1.0", stopindex="end")
+            if idx:
+                return "%s.0" % idx.split(".")[0]
+        except Exception:
+            pass
+        return None
+
+    def _tick_thinking(self):
+        if not self._thinking:
+            return
+        frame = self._THINKING_FRAMES[self._thinking_frame % len(self._THINKING_FRAMES)]
+        self._thinking_frame += 1
+        try:
+            self.output.configure(state="normal")
+            li = self._thinking_line()
+            if li is None:
+                self.output.insert("end", frame + "\n")
+            else:
+                self.output.delete(li, li + " lineend +1c")
+                self.output.insert(li, frame + "\n")
+            self.output.see("end")
+            self.output.configure(state="disabled")
+        except Exception:
+            pass
+        self._thinking_job = self.root.after(280, self._tick_thinking)
+
+    def _stop_thinking(self):
+        self._thinking = False
+        if self._thinking_job is not None:
+            try:
+                self.root.after_cancel(self._thinking_job)
+            except Exception:
+                pass
+            self._thinking_job = None
+        li = self._thinking_line()
+        if li is not None:
+            try:
+                self.output.configure(state="normal")
+                self.output.delete(li, li + " lineend +1c")
+                self.output.configure(state="disabled")
+            except Exception:
+                pass
 
     def process_command(self, cmd):
         cmd = cmd.strip()
@@ -819,6 +900,9 @@ class GameBoyTerminal:
         arg = cmd[4:].strip()
         if not arg:
             self.append_output("  BMO: Tell me your name with /name <name>!")
+            return
+        if self._reserved_name(arg):
+            self.append_output("  BMO: That's my name! (I'm BMO \u2665) Try /name <your-name>!")
             return
         self.memory["name"] = arg[:40]
         self.pending_name = False
@@ -926,6 +1010,23 @@ class GameBoyTerminal:
             return False
         return all(c.isalpha() or c in " -'.@_" for c in s)
 
+    _GREETINGS = {"hi", "hello", "hey", "yo", "sup", "hola", "howdy", "hiya",
+                  "wassup", "whatsup", "greetings", "good", "morning",
+                  "afternoon", "evening", "thanks", "thank", "please", "ok",
+                  "okay", "yes", "yeah", "yep", "nope", "no", "bye", "goodbye",
+                  "welcome", "sure", "night", "how", "what", "who", "where",
+                  "when", "why"}
+
+    def _reserved_name(self, name):
+        n = name.strip().lower()
+        if not n:
+            return True
+        words = re.findall(r"[a-z]+", n)
+        if "bmo" in words:
+            return True
+        first = words[0] if words else ""
+        return first in self._GREETINGS
+
     _NAME_EXTRACT = re.compile(
         r"\bmy\s+name\s+is\s+([A-Za-z][A-Za-z.'-]{0,30})|"
         r"\bcall\s+me\s+([A-Za-z][A-Za-z.'-]{0,30})|"
@@ -971,7 +1072,7 @@ class GameBoyTerminal:
         # first-run onboarding: the first message is the user's name
         if self.pending_confirm is not None:
             sub = self._extract_name(text)
-            if sub and sub.lower() != self.pending_confirm.lower():
+            if sub and not self._reserved_name(sub) and sub.lower() != self.pending_confirm.lower():
                 self.pending_confirm = sub
                 self.append_output(
                     f"  BMO: Got it - so your name is \"{sub}\", right? (yes or no)")
@@ -992,24 +1093,30 @@ class GameBoyTerminal:
                     "is your name? (yes or no)")
             return
         if self.pending_name:
-            cand = text[:40]
-            if self._looks_like_name(cand):
+            cand = text[:40].strip()
+            sub = self._extract_name(text)
+            if sub and not self._reserved_name(sub):
+                self.pending_confirm = sub
+                self.append_output(
+                    f"  BMO: Nice - so your name is \"{sub}\", right? (yes or no)")
+            elif cand and self._looks_like_name(cand) and not self._reserved_name(cand):
                 self.memory["name"] = cand
                 self.pending_name = False
                 self._save_memory()
                 self.append_output(f"  BMO: Hi {cand}! I'm BMO, your GameBoy friend. \u2665  "
                                    "I'll call you " + cand + " from now on.")
+            elif cand and not self._reserved_name(cand):
+                self.pending_confirm = cand
+                self.append_output(
+                    f"  BMO: Hmm, that doesn't look like a name... "
+                    f"are you sure \"{cand}\" is your name? (yes or no)")
             else:
-                sub = self._extract_name(text)
-                if sub:
-                    self.pending_confirm = sub
+                if "bmo" in cand.lower().split():
                     self.append_output(
-                        f"  BMO: Nice - so your name is \"{sub}\", right? (yes or no)")
+                        "  BMO: BMO is ME! What's YOUR name? (just type it) \u2665")
                 else:
-                    self.pending_confirm = cand
                     self.append_output(
-                        f"  BMO: Hmm, that doesn't look like a name... "
-                        f"are you sure \"{cand}\" is your name? (yes or no)")
+                        "  BMO: Hi there! What's your name? (just type it)")
             return
         if self._RENAME_ME.search(text):
             self.append_output("  BMO: Nope! My name is BMO and it's staying that way forever. \u2665")
@@ -1031,51 +1138,52 @@ class GameBoyTerminal:
             self.append_output("  BMO: one thing at a time, I'm still thinking! \u2665")
             return
         self._ai_busy = True
+        self._start_thinking()
         threading.Thread(target=self._chat_worker, args=(text,), daemon=True).start()
 
     def _chat_worker(self, user_text):
-        msgs = [{"role": "system", "content": self._system_prompt()}]
-        for m in self.memory.get("messages", [])[-16:]:
-            msgs.append({"role": m["role"], "content": m["content"]})
-        msgs.append({"role": "user", "content": user_text})
         try:
-            reply = self._ollama_chat(msgs)
-        except urllib.error.HTTPError as e:
-            if e.code == 404:
-                self._put("  BMO: downloading my brain (first time, ~400MB)...")
-                if not self._pull_model():
-                    self._put("  BMO: still can't reach the model. Try: ollama pull " + self.ai_model)
-                    self._ai_busy = False
+            msgs = [{"role": "system", "content": self._system_prompt()}]
+            for m in self.memory.get("messages", [])[-16:]:
+                msgs.append({"role": m["role"], "content": m["content"]})
+            msgs.append({"role": "user", "content": user_text})
+            try:
+                reply = self._ollama_chat(msgs)
+            except urllib.error.HTTPError as e:
+                if e.code == 404:
+                    self._put("  BMO: downloading my brain (first time, ~400MB)...")
+                    if not self._pull_model():
+                        self._put("  BMO: still can't reach the model. Try: ollama pull " + self.ai_model)
+                        return
+                    try:
+                        reply = self._ollama_chat(msgs)
+                    except Exception:
+                        self._put("  BMO: hmm, still can't reach the model. Try: ollama pull " + self.ai_model)
+                        return
+                else:
+                    self._put("  BMO: hiccup talking to Ollama (%s)." % e)
                     return
-                try:
-                    reply = self._ollama_chat(msgs)
-                except Exception:
-                    self._put("  BMO: hmm, still can't reach the model. Try: ollama pull " + self.ai_model)
-                    self._ai_busy = False
-                    return
-            else:
+            except Exception as e:
                 self._put("  BMO: hiccup talking to Ollama (%s)." % e)
-                self._ai_busy = False
                 return
-        except Exception as e:
-            self._put("  BMO: hiccup talking to Ollama (%s)." % e)
+
+            self.memory.setdefault("messages", []).append(
+                {"role": "user", "content": user_text})
+            self.memory["messages"].append({"role": "assistant", "content": reply})
+            # keep the file light: cap at 200 saved messages
+            if len(self.memory["messages"]) > 200:
+                self.memory["messages"] = self.memory["messages"][-200:]
+            self._save_memory()
+            for line in reply.splitlines() or [reply]:
+                self._put("  BMO: " + line)
+        finally:
             self._ai_busy = False
-            return
+            self.output_queue.put(("__ai_done__", None))
 
-        self.memory.setdefault("messages", []).append(
-            {"role": "user", "content": user_text})
-        self.memory["messages"].append({"role": "assistant", "content": reply})
-        # keep the file light: cap at 200 saved messages
-        if len(self.memory["messages"]) > 200:
-            self.memory["messages"] = self.memory["messages"][-200:]
-        self._save_memory()
-        for line in reply.splitlines() or [reply]:
-            self._put("  BMO: " + line)
-        self._ai_busy = False
-
-    def _ollama_chat(self, messages, timeout=120):
+    def _ollama_chat(self, messages, timeout=120, max_tokens=96):
         body = json.dumps({"model": self.ai_model, "messages": messages,
-                           "stream": False}).encode("utf-8")
+                           "stream": False,
+                           "options": {"num_predict": max_tokens}}).encode("utf-8")
         req = urllib.request.Request(self.ai_url + "/api/chat", data=body,
                                      headers={"Content-Type": "application/json"})
         with urllib.request.urlopen(req, timeout=timeout) as r:
@@ -1150,21 +1258,27 @@ class GameBoyTerminal:
         if not self.proactive_on:
             return
         if (self.pending_name or self.pending_confirm or self._ai_busy or
-                self.saver_active or self.term_active or not self.memory.get("name") or
-                (time.time() - self.last_activity) < 30):
+                self.term_active or not self.memory.get("name")):
             self._schedule_proactive()
             return
+        if self.saver_active:
+            self.exit_saver()
+        self._start_thinking()
         threading.Thread(target=self._proactive_worker, args=(), daemon=True).start()
 
     def _proactive_worker(self):
-        msg = self._generate_proactive()
-        if msg:
-            for line in msg.splitlines() or [msg]:
-                self._put("  BMO: " + line)
-        self.output_queue.put("__proactive_next__")
+        try:
+            msg = self._generate_proactive()
+            if msg:
+                for line in msg.splitlines() or [msg]:
+                    self._put("  BMO: " + line)
+        finally:
+            self.output_queue.put("__proactive_next__")
+            self.output_queue.put(("__ai_done__", None))
 
     _BAD_START = re.compile(r"^(hi|hiya|hey|hello|yo|greetings|how|sure|okay|ok\b|good\s)",
                             re.I)
+    _BAD_ASK_NAME = re.compile(r"what'?s\s+your\s+name|what\s+is\s+your\s+name", re.I)
 
     def _good_proactive(self, reply):
         r = reply.strip()
@@ -1172,23 +1286,59 @@ class GameBoyTerminal:
             return False
         if self._BAD_START.match(r):
             return False
+        if self._BAD_ASK_NAME.search(r):
+            return False
         return True
+
+    def _user_context(self):
+        name = self.memory.get("name")
+        bits = []
+        if name:
+            bits.append(f"the user's name is {name}")
+        msgs = self.memory.get("messages", []) or []
+        user_lines = [m.get("content", "") for m in msgs if m.get("role") == "user"]
+        if user_lines:
+            recent = " | ".join(x for x in user_lines[-5:] if x)
+            bits.append(f"recently the user told you: {recent}")
+        return " ".join(bits) if bits else "you don't know much about the user yet"
+
+    _RECALL = re.compile(
+        r"\b(i\s+(?:like|love|enjoy|hate)\s+[^.,!?]+)"
+        r"|\b(i\s+(?:went|went to|visited|had|ate|watched|played|made|built|read|bought)\s+[^.,!?]+)"
+        r"|\b(my\s+favorite\s+[a-z]+(\s+is|:)?\s+[^.,!?]+)"
+        r"|\b(i\s+want(?:ed| to)?\s+[^.,!?]+)", re.I)
+
+    def _recall_question(self):
+        msgs = self.memory.get("messages", []) or []
+        user_lines = [m.get("content", "") for m in msgs if m.get("role") == "user"]
+        name = self.memory.get("name", "friend")
+        for line in reversed(user_lines):
+            m = self._RECALL.search(line or "")
+            if m:
+                bit = m.group(0).strip()
+                return f'You told me "{bit}" - tell me more about that, {name}?'
+        return None
 
     def _generate_proactive(self):
         name = self.memory.get("name", "friend")
+        context = self._user_context()
         try:
             if self._ai_available():
                 msgs = [{"role": "system", "content": self._system_prompt() + " "
                          "Speak to the user first, on your own. Do NOT greet or introduce "
-                         "yourself. Ask the user one personal question about their life, "
-                         "or share one fun fact about Adventure Time or the Land of Ooo. "
-                         "One short sentence only."},
+                         "yourself. Ask the user ONE personal question based on what you "
+                         "know about them, OR share ONE fun fact about Adventure Time or "
+                         "the Land of Ooo. One short sentence only. "
+                         "What you know about the user: " + context},
                         {"role": "user", "content": "Say something to me."}]
-                reply = self._ollama_chat(msgs, timeout=30)
+                reply = self._ollama_chat(msgs, timeout=30, max_tokens=48)
                 if reply and self._good_proactive(reply):
                     return reply
         except Exception:
             pass
+        recall = self._recall_question()
+        if recall and random.random() < 0.6:
+            return recall
         return random.choice(self._PROACTIVE_SCRIPTS).format(name=name)
 
     def cmd_talk(self, arg=None):
@@ -1209,7 +1359,7 @@ class GameBoyTerminal:
 
     # ---- auto-updater (checks GitHub, installs if the user agrees) ----
 
-    APP_VERSION = "2.4"
+    APP_VERSION = "2.8"
     UPDATE_URL = "https://raw.githubusercontent.com/lmdelm-dev/bmo/main/gameboy.py"
     UPDATE_TARBALL = "https://codeload.github.com/lmdelm-dev/bmo/tar.gz/refs/heads/main"
 
@@ -1319,6 +1469,7 @@ class GameBoyTerminal:
         return any(os.path.basename(w) in self.INTERACTIVE for w in words)
 
     def clear_output(self):
+        self._stop_thinking()
         self.output.configure(state="normal")
         self.output.delete("1.0", "end")
         self.output.configure(state="disabled")
@@ -1406,6 +1557,10 @@ class GameBoyTerminal:
                 item = self.output_queue.get_nowait()
                 if item == "__proactive_next__":
                     self._schedule_proactive()
+                    continue
+                if isinstance(item, tuple) and item[0] == "__ai_done__":
+                    self._stop_thinking()
+                    self.register_activity()
                     continue
                 if item == "__update_applied__":
                     self._relaunch()
