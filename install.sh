@@ -5,7 +5,8 @@
 #
 # The installer checks for, and installs when missing:
 #   - Python 3 + tkinter   (system package)
-#   - Pillow, python-xlib   (pip --user)
+#   - Pillow, python-xlib, vosk  (pip --user)
+#   - espeak-ng             (system package; powers BMO's voice)
 #   - opencode              (curl -fsSL https://opencode.ai/install | bash)
 #   - xterm                 (system package; powers BMO's embedded terminal)
 #   - the Blue Water font   (shipped, fc-cache)
@@ -106,6 +107,24 @@ if [ "$(uname -s)" = "Linux" ] && ! need xterm; then
     need xterm || echo "    continuing without xterm (embedded terminal disabled)"
 fi
 
+# --- espeak-ng (BMO's voice - text-to-speech) ---
+if [ "$(uname -s)" = "Linux" ] && ! need espeak-ng && ! need espeak; then
+    echo "    espeak-ng is missing (BMO's voice)."
+    if ask "    Install espeak-ng now?"; then
+        if need apt-get; then sudo apt-get install -y espeak-ng
+        elif need zypper; then sudo zypper install -y espeak-ng
+        elif need dnf; then sudo dnf install -y espeak-ng
+        elif need pacman; then sudo pacman -S --noconfirm espeak-ng
+        else echo "    (could not auto-install espeak-ng - BMO will talk in text until you install it)"
+        fi
+    fi
+    need espeak-ng || need espeak || echo "    continuing without voice (text-only for now)"
+fi
+if [ "$(uname -s)" = "Darwin" ] && ! need espeak-ng && ! need espeak; then
+    echo "    installing espeak (BMO's voice) via Homebrew..."
+    brew install espeak 2>/dev/null || echo "    (espeak install failed - text-only for now)"
+fi
+
 # --- opencode (powers the 'mo' command) ---
 if ! need opencode; then
     echo "    opencode is missing (powers the 'mo' shortcut)."
@@ -143,6 +162,12 @@ if [ "$(uname -s)" = "Linux" ] && ! python3 -c "import Xlib" 2>/dev/null; then
     echo "    installing python-xlib (minimize/restore hotkey)..."
     python3 -m pip install --user python-xlib >/dev/null 2>&1 || \
         echo "    (python-xlib install failed - minimize/restore hotkey disabled)"
+fi
+if ! python3 -c "import vosk" 2>/dev/null; then
+    echo "    installing vosk (BMO's ears - speech-to-text)..."
+    ( python3 -m pip install --user vosk >/dev/null 2>&1 || \
+      python3 -m pip install --user --break-system-packages vosk >/dev/null 2>&1 ) || \
+        echo "    (vosk install failed - hold-MIC talking disabled; fix later: pip install --user vosk)"
 fi
 
 # ----------------------------------------------------------------------------

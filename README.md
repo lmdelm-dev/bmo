@@ -21,6 +21,8 @@ with you, runs commands, and even speaks up on its own once in a while.
 - 💬 **Talks first** sometimes, asking about things you've mentioned ("so you like
   hiking? tell me more!")
 - ฅ(=`ω`=)ฅ **Cat loading animation** while it thinks
+- 🗣️ **Has a voice** - BMO *speaks* out loud (espeak-ng), and you can talk back
+  by **holding the pink MIC button** (vosk, offline speech-to-text) ♥
 - 😴 **Falls asleep** after 2 minutes of quiet (cute sleep face!) - wake it with a
   mouse move or any key
 - 🐚 **A real terminal** - run commands, `/mo` opens opencode, `/gmo` opens w3m
@@ -70,10 +72,14 @@ cd bmo
 | `/memory` | what BMO remembers |
 | `/forget` | forget everything |
 | `/model [name]` | change the AI model |
+| `/voice on\|off` | BMO talks out loud (test it with `/voice test`) |
 | `/ls`, `/pwd`, ... | run any shell command |
 | `/mo`, `/gmo` | open opencode / w3m |
 | `/fs`, `/clear`, `/quit` | fullscreen / clear / quit |
 
+- **Talk to BMO:** hold the pink **MIC** button in the top-right corner, say
+  something, release it - BMO types what you said and replies (out loud!). The
+  first time you do this it downloads a small offline speech model (~50MB)
 - The blue **_** button minimizes (bring it back with **Ctrl+Alt+B**), the red **X** closes BMO
 - Idle for **2 minutes** and BMO falls asleep - just move the mouse or press a key to wake it up
 

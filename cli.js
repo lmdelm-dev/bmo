@@ -96,6 +96,21 @@ function bootstrapDeps() {
       " elif command -v pacman >/dev/null; then sudo pacman -S --noconfirm xterm; fi"]);
   }
 
+  // --- espeak-ng (BMO's voice - text-to-speech) ---
+  if (isLinux && !have("espeak-ng") && !have("espeak")) {
+    console.log("bmo: espeak-ng missing (BMO's voice) - installing...");
+    sh("bash", ["-c",
+      "if command -v apt-get >/dev/null; then sudo apt-get install -y espeak-ng;" +
+      " elif command -v zypper >/dev/null; then sudo zypper install -y espeak-ng;" +
+      " elif command -v dnf >/dev/null; then sudo dnf install -y espeak-ng;" +
+      " elif command -v pacman >/dev/null; then sudo pacman -S --noconfirm espeak-ng; fi"]);
+  }
+  if (process.platform === "darwin" && !have("espeak-ng") && !have("espeak")) {
+    console.log("bmo: installing espeak (BMO's voice) via Homebrew...");
+    try { sh("brew", ["install", "espeak"]); }
+    catch (_) { console.log("bmo: (espeak install failed - text-only for now)"); }
+  }
+
   // --- opencode (powers the 'mo' shortcut) ---
   if (!have("opencode")) {
     console.log("bmo: opencode missing - installing via curl -fsSL https://opencode.ai/install | bash ...");
@@ -136,6 +151,14 @@ function bootstrapDeps() {
       try { sh(py, ["-m", "pip", "install", "--user", "python-xlib"]); }
       catch (_) { console.log("bmo: (python-xlib install failed - restore hotkey disabled)"); }
     }
+  }
+  try { execFileSync(py, ["-c", "import vosk"], { stdio: "ignore" }); }
+  catch (_) {
+    console.log("bmo: installing vosk (BMO's ears - speech-to-text)...");
+    let ok = false;
+    try { sh(py, ["-m", "pip", "install", "--user", "vosk"]); ok = true; }
+    catch (_) { try { sh(py, ["-m", "pip", "install", "--user", "--break-system-packages", "vosk"]); ok = true; } catch (__) {} }
+    if (!ok) console.log("bmo: (vosk install failed - hold-MIC talking disabled; fix later: pip install --user vosk)");
   }
   return py;
 }

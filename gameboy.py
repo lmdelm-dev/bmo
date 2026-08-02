@@ -11,6 +11,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import zipfile
 import threading
 import time
 import urllib.request
@@ -77,6 +78,19 @@ class GameBoyTerminal:
         self.memory = self._load_memory()
         self.pending_name = not self.memory.get("name")
         self.pending_confirm = None
+
+        self.voice_on = bool(self.memory.get("voice", True))
+        self._speak_queue = queue.Queue()
+        self._speak_thread = None
+        self._voice_lock = threading.Lock()
+        self._vosk_lock = threading.Lock()
+        self._vosk_model = None
+        self._vosk_rec = None
+        self._rec_proc = None
+        self._rec_file = None
+        self._listening = False
+        self._processing = False
+        self._brain_msg = self._BRAIN_MSG
 
         self.term_active = False
         self.term_frame = None
@@ -166,6 +180,13 @@ class GameBoyTerminal:
         self.close_btn.pack(side="right")
         self.minimize_btn.pack(side="right")
         self.fullscreen_btn.pack(side="right")
+
+        self.mic_btn = self.make_round_btn(self.header, "#F20553", "#C00445",
+                                           "MIC", "#FFFFFF", self.mic_press)
+        self.mic_btn.bind("<ButtonRelease-1>", lambda e: self.mic_release())
+        self.mic_btn.pack(side="right")
+        self.root.bind("<ButtonRelease-1>", lambda e: self.mic_release())
+
         led = tk.Canvas(self.header, width=12, height=12, bg="#63BDA4", highlightthickness=0)
         led.pack(side="right")
         led.create_oval(1, 1, 11, 11, fill="#F20553", outline="")
@@ -641,6 +662,7 @@ class GameBoyTerminal:
                     self.term_proc.terminate()
             except Exception:
                 pass
+        self._stop_recording()
         self.root.destroy()
 
     def get_edge(self, x, y):
@@ -793,6 +815,8 @@ class GameBoyTerminal:
         self.output.insert("end", text + "\n")
         self.output.see("end")
         self.output.configure(state="disabled")
+        if text.startswith("  BMO: "):
+            self._speak(text)
 
     _THINKING_FRAMES = [
         "  \u0e1f(=\u03c9=)\u0e1f thinking.",
@@ -873,7 +897,7 @@ class GameBoyTerminal:
 
     def _brain_block(self):
         frame = "\n".join(self._BRAIN_CAT[self._brain_frame % len(self._BRAIN_CAT)])
-        return frame + "\n" + self._BRAIN_MSG + "." * (self._brain_frame % 3 + 1) + "\n"
+        return frame + "\n" + self._brain_msg + "." * (self._brain_frame % 3 + 1) + "\n"
 
     def _brain_nlines(self):
         return len(self._BRAIN_CAT[0]) + 1
@@ -888,7 +912,8 @@ class GameBoyTerminal:
             pass
         return None, None
 
-    def _start_brain_download(self):
+    def _start_brain_download(self, msg=None):
+        self._brain_msg = msg if msg is not None else self._BRAIN_MSG
         self._stop_thinking()
         self._stop_brain_download()
         self._brain = True
@@ -946,6 +971,10 @@ class GameBoyTerminal:
             self.force_idle()
         elif cmd_lower.startswith("name"):
             self.cmd_name(cmd)
+        elif cmd_lower == "voice":
+            self.cmd_voice()
+        elif cmd_lower.startswith("voice "):
+            self.cmd_voice(cmd[6:].strip())
         elif cmd_lower == "memory":
             self.cmd_memory()
         elif cmd_lower == "forget":
@@ -1009,6 +1038,229 @@ class GameBoyTerminal:
             self.append_output(f"  BMO: model set to {arg}. (pull it first: ollama pull {arg})")
             return
         self.append_output(f"  BMO: current model: {self.ai_model}  (change: /model <name>)")
+
+    # ---- voice (talk + listen) ----
+
+    _VOSK_MODEL_URL = "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip"
+    _VOSK_MODEL_NAME = "vosk-model-small-en-us-0.15"
+
+    def _tts_bin(self):
+        return shutil.which("espeak-ng") or shutil.which("espeak")
+
+    def _tts_available(self):
+        return self._tts_bin() is not None
+
+    def _clean_speech(self, text):
+        t = re.sub(r"^BMO:\s*", "", text)
+        t = re.sub(r"\u2588", "", t)
+        t = re.sub(r"[*_`#>|]", "", t)
+        t = re.sub(r"https?://\S+|www\.\S+", " link ", t)
+        t = re.sub(r"[\u2665\u2764\u2765\u2766\u2661]", "", t)
+        t = re.sub(r"\s+", " ", t)
+        return t.strip()
+
+    def _speak(self, text, force=False):
+        if not force and not self.voice_on:
+            return
+        if not self._tts_available():
+            return
+        if not self._speak_thread or not self._speak_thread.is_alive():
+            self._speak_thread = threading.Thread(target=self._speak_loop, daemon=True)
+            self._speak_thread.start()
+        self._speak_queue.put(text)
+
+    def _speak_loop(self):
+        while True:
+            text = self._speak_queue.get()
+            if text is None:
+                return
+            self._say(text)
+
+    def _say(self, text):
+        try:
+            with self._voice_lock:
+                bin_ = self._tts_bin()
+                if not bin_:
+                    return
+                clean = self._clean_speech(text)
+                if not clean:
+                    return
+                subprocess.run([bin_, "-v", "en-us", "-p", "70", "-s", "155", clean],
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                               timeout=120)
+        except Exception:
+            pass
+
+    def cmd_voice(self, arg=""):
+        a = (arg or "").strip().lower()
+        if a == "off":
+            self.voice_on = False
+            self.memory["voice"] = False
+            self._save_memory()
+            self.append_output("  BMO: okay, I'll stay quiet now... but I'm still here \u2665")
+        elif a == "on":
+            self.voice_on = True
+            self.memory["voice"] = True
+            self._save_memory()
+            self.append_output("  BMO: my voice is back on! \u2665")
+        elif a == "test":
+            was = self.voice_on
+            self.voice_on = True
+            self.append_output("  BMO: Testing, testing, 1 2 3! Can you hear me? \u2665")
+            self.voice_on = was
+        else:
+            state = "on" if self.voice_on else "off"
+            self.append_output(f"  BMO: voice is {state}.  (/voice on|off|test)")
+
+    def _vosk_dir(self):
+        return os.path.join(self.data_dir, "vosk-model")
+
+    def _vosk_available(self):
+        try:
+            import vosk  # noqa
+            return True
+        except Exception:
+            return False
+
+    def _get_vosk_model(self):
+        model_dir = self._vosk_dir()
+        model_path = os.path.join(model_dir, self._VOSK_MODEL_NAME)
+        if os.path.isdir(model_path):
+            return model_path
+        if not self._vosk_available():
+            self._put("  BMO: voice listening needs vosk - install it: pip install vosk")
+            return None
+        self._put(("__ears_start__", None))
+        try:
+            os.makedirs(model_dir, exist_ok=True)
+            zpath = os.path.join(model_dir, "model.zip")
+            urllib.request.urlretrieve(self._VOSK_MODEL_URL, zpath)
+            with zipfile.ZipFile(zpath) as z:
+                z.extractall(model_dir)
+            try:
+                os.remove(zpath)
+            except Exception:
+                pass
+            return model_path
+        except Exception as e:
+            self._put("  BMO: couldn't download my ears (%s) - try again later" % e)
+            return None
+        finally:
+            self._put(("__ears_stop__", None))
+
+    def mic_press(self, event=None):
+        if self.saver_active:
+            self.exit_saver()
+        if self._listening or self._rec_proc is not None or self._processing:
+            return
+        if not self._vosk_available():
+            self.append_output("  BMO: I can't listen yet - install vosk: pip install vosk")
+            return
+        self._listening = True
+        threading.Thread(target=self._start_record, daemon=True).start()
+
+    def mic_release(self, event=None):
+        if not self._listening:
+            return
+        self._listening = False
+        self._processing = True
+        threading.Thread(target=self._finish_record, daemon=True).start()
+
+    def _start_record(self):
+        try:
+            tmp = os.path.join(tempfile.gettempdir(), "bmo_rec.wav")
+            self._rec_file = tmp
+            if os.path.exists(tmp):
+                os.remove(tmp)
+            if shutil.which("arecord"):
+                proc = subprocess.Popen(
+                    ["arecord", "-q", "-f", "S16_LE", "-r", "16000", "-c", "1",
+                     "-t", "wav", tmp],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            elif shutil.which("parecord"):
+                proc = subprocess.Popen(
+                    ["parecord", "--channels=1", "--rate=16000", "--format=s16le", tmp],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            else:
+                self._put("  BMO: no recorder found (need arecord or parecord)")
+                self._listening = False
+                return
+            self._rec_proc = proc
+        except Exception as e:
+            self._tlog("record start failed: %s" % e)
+            self._rec_proc = None
+            self._listening = False
+
+    def _finish_record(self):
+        deadline = time.time() + 2
+        while self._rec_proc is None and time.time() < deadline:
+            time.sleep(0.02)
+        proc = self._rec_proc
+        self._rec_proc = None
+        if proc is not None:
+            try:
+                proc.terminate()
+            except Exception:
+                pass
+            try:
+                proc.wait(timeout=5)
+            except Exception:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+        tmp = self._rec_file
+        self._rec_file = None
+        if not tmp or not os.path.exists(tmp) or os.path.getsize(tmp) < 1000:
+            self._processing = False
+            return
+        text = self._transcribe(tmp)
+        try:
+            os.remove(tmp)
+        except Exception:
+            pass
+        if text:
+            self._put(("__transcribed__", text))
+        self._processing = False
+
+    def _transcribe(self, wav_path):
+        try:
+            import vosk
+            model_path = self._get_vosk_model()
+            if not model_path:
+                return ""
+            with self._vosk_lock:
+                if self._vosk_model is None:
+                    self._vosk_model = vosk.Model(model_path)
+                if self._vosk_rec is None:
+                    self._vosk_rec = vosk.KaldiRecognizer(self._vosk_model, 16000)
+                rec = self._vosk_rec
+            rec.Reset()
+            with open(wav_path, "rb") as f:
+                data = f.read()
+            if data[:4] == b"RIFF":
+                i = 12
+                while i < len(data) - 8:
+                    cid = data[i:i + 4]
+                    csize = int.from_bytes(data[i + 4:i + 8], "little")
+                    if cid == b"data":
+                        data = data[i + 8:i + 8 + csize]
+                        break
+                    i += 8 + csize
+            if rec.AcceptWaveform(data):
+                return json.loads(rec.Result()).get("text", "").strip()
+            return json.loads(rec.FinalResult()).get("text", "").strip()
+        except Exception as e:
+            self._tlog("transcribe failed: %s" % e)
+            return ""
+
+    def _stop_recording(self):
+        self._listening = False
+        if self._rec_proc is not None:
+            try:
+                self._rec_proc.terminate()
+            except Exception:
+                pass
 
     # ---- AI chat (Ollama, offline) ----
 
@@ -1441,7 +1693,7 @@ class GameBoyTerminal:
 
     # ---- auto-updater (checks GitHub, installs if the user agrees) ----
 
-    APP_VERSION = "2.10"
+    APP_VERSION = "2.11"
     UPDATE_URL = "https://raw.githubusercontent.com/lmdelm-dev/bmo/main/gameboy.py"
     UPDATE_TARBALL = "https://codeload.github.com/lmdelm-dev/bmo/tar.gz/refs/heads/main"
 
@@ -1568,6 +1820,7 @@ class GameBoyTerminal:
         self.append_output("    /memory          - what I remember")
         self.append_output("    /forget          - clear chat memory")
         self.append_output("    /model [name]    - show/change AI model")
+        self.append_output("    /voice on|off    - BMO talks out loud (hold MIC to talk to him)")
         self.append_output("    /talk on|off     - BMO chats on his own")
         self.append_output("    /update now      - check for updates")
         self.append_output("    /mo              - open opencode")
@@ -1654,6 +1907,20 @@ class GameBoyTerminal:
                 if isinstance(item, tuple) and item[0] == "__brain_done__":
                     self.clear_output()
                     self.append_output("  BMO: Hey, everything's done! I'm all set and ready to chat \u2665")
+                    continue
+                if isinstance(item, tuple) and item[0] == "__ears_start__":
+                    self._start_brain_download("  please wait, downloading my ears...")
+                    continue
+                if isinstance(item, tuple) and item[0] == "__ears_stop__":
+                    self._stop_brain_download()
+                    continue
+                if isinstance(item, tuple) and item[0] == "__transcribed__":
+                    t = item[1]
+                    if t:
+                        self.input_var.set(t)
+                        self.submit()
+                    else:
+                        self.append_output("  BMO: Hmm, I didn't catch that. Can you say it again?")
                     continue
                 if item == "__update_applied__":
                     self._relaunch()
