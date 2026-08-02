@@ -112,6 +112,9 @@ class GameBoyTerminal:
         self._thinking = False
         self._thinking_job = None
         self._thinking_frame = 0
+        self._brain = False
+        self._brain_job = None
+        self._brain_frame = 0
         self.root.after(15000, self._start_update_check)
         self.root.mainloop()
 
@@ -850,6 +853,82 @@ class GameBoyTerminal:
             except Exception:
                 pass
 
+    _BRAIN_CAT = [
+        ["  \u2588\u2588   \u2588\u2588",
+         " \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588",
+         " \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588",
+         " \u2588\u2588\u2588\u2588  \u2588\u2588\u2588\u2588",
+         " \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588",
+         " \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588",
+         " \u2588 \u2588\u2588\u2588\u2588\u2588 \u2588"],
+        ["   \u2588\u2588   \u2588\u2588",
+         "  \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588",
+         "  \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588",
+         "  \u2588\u2588\u2588\u2588  \u2588\u2588\u2588\u2588",
+         "  \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588",
+         "  \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588",
+         "  \u2588\u2588 \u2588\u2588 \u2588\u2588"],
+    ]
+    _BRAIN_MSG = "  please wait, loading BMO's brain"
+
+    def _brain_block(self):
+        frame = "\n".join(self._BRAIN_CAT[self._brain_frame % len(self._BRAIN_CAT)])
+        return frame + "\n" + self._BRAIN_MSG + "." * (self._brain_frame % 3 + 1) + "\n"
+
+    def _brain_nlines(self):
+        return len(self._BRAIN_CAT[0]) + 1
+
+    def _brain_region(self):
+        try:
+            idx = self.output.search("\u2588", "1.0", stopindex="end")
+            if idx:
+                line = int(idx.split(".")[0])
+                return "%d.0" % line, "%d.0" % (line + self._brain_nlines())
+        except Exception:
+            pass
+        return None, None
+
+    def _start_brain_download(self):
+        self._stop_thinking()
+        self._stop_brain_download()
+        self._brain = True
+        self._brain_frame = 0
+        self._brain_job = None
+        self._tick_brain()
+
+    def _tick_brain(self):
+        if not self._brain:
+            return
+        self._brain_frame += 1
+        try:
+            self.output.configure(state="normal")
+            start, end = self._brain_region()
+            if start:
+                self.output.delete(start, end)
+            self.output.insert("end", self._brain_block())
+            self.output.see("end")
+            self.output.configure(state="disabled")
+        except Exception:
+            pass
+        self._brain_job = self.root.after(250, self._tick_brain)
+
+    def _stop_brain_download(self):
+        self._brain = False
+        if self._brain_job is not None:
+            try:
+                self.root.after_cancel(self._brain_job)
+            except Exception:
+                pass
+            self._brain_job = None
+        try:
+            self.output.configure(state="normal")
+            start, end = self._brain_region()
+            if start:
+                self.output.delete(start, end)
+            self.output.configure(state="disabled")
+        except Exception:
+            pass
+
     def process_command(self, cmd):
         cmd = cmd.strip()
         if cmd.startswith("!"):
@@ -1151,8 +1230,10 @@ class GameBoyTerminal:
                 reply = self._ollama_chat(msgs)
             except urllib.error.HTTPError as e:
                 if e.code == 404:
-                    self._put("  BMO: downloading my brain (first time, ~400MB)...")
-                    if not self._pull_model():
+                    self._put(("__brain_start__", None))
+                    ok = self._pull_model()
+                    self._put(("__brain_stop__", None))
+                    if not ok:
                         self._put("  BMO: still can't reach the model. Try: ollama pull " + self.ai_model)
                         return
                     try:
@@ -1359,7 +1440,7 @@ class GameBoyTerminal:
 
     # ---- auto-updater (checks GitHub, installs if the user agrees) ----
 
-    APP_VERSION = "2.8"
+    APP_VERSION = "2.9"
     UPDATE_URL = "https://raw.githubusercontent.com/lmdelm-dev/bmo/main/gameboy.py"
     UPDATE_TARBALL = "https://codeload.github.com/lmdelm-dev/bmo/tar.gz/refs/heads/main"
 
@@ -1470,6 +1551,7 @@ class GameBoyTerminal:
 
     def clear_output(self):
         self._stop_thinking()
+        self._stop_brain_download()
         self.output.configure(state="normal")
         self.output.delete("1.0", "end")
         self.output.configure(state="disabled")
@@ -1561,6 +1643,12 @@ class GameBoyTerminal:
                 if isinstance(item, tuple) and item[0] == "__ai_done__":
                     self._stop_thinking()
                     self.register_activity()
+                    continue
+                if isinstance(item, tuple) and item[0] == "__brain_start__":
+                    self._start_brain_download()
+                    continue
+                if isinstance(item, tuple) and item[0] == "__brain_stop__":
+                    self._stop_brain_download()
                     continue
                 if item == "__update_applied__":
                     self._relaunch()
