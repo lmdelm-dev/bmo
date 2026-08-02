@@ -820,12 +820,12 @@ class GameBoyTerminal:
         if not self.term_active:
             self.input_entry.focus_set()
 
-    def append_output(self, text):
+    def append_output(self, text, speak=True):
         self.output.configure(state="normal")
         self.output.insert("end", text + "\n")
         self.output.see("end")
         self.output.configure(state="disabled")
-        if text.startswith("  BMO: "):
+        if speak and text.startswith("  BMO: "):
             self._speak(text)
 
     _THINKING_FRAMES = [
@@ -1346,7 +1346,7 @@ class GameBoyTerminal:
                 self._listening = False
                 return
             self._rec_proc = proc
-            self._put("  BMO: listening... hold to talk, release to send \u2665")
+            self._put(("__silent__", "  BMO: listening... hold to talk, release to send \u2665"))
         except Exception as e:
             self._tlog("record start failed: %s" % e)
             self._put("  BMO: could not start recording (%s)" % e)
@@ -1876,7 +1876,7 @@ class GameBoyTerminal:
 
     # ---- auto-updater (checks GitHub, installs if the user agrees) ----
 
-    APP_VERSION = "2.18"
+    APP_VERSION = "2.19"
     UPDATE_URL = "https://raw.githubusercontent.com/lmdelm-dev/bmo/main/gameboy.py"
     UPDATE_TARBALL = "https://codeload.github.com/lmdelm-dev/bmo/tar.gz/refs/heads/main"
 
@@ -2123,6 +2123,9 @@ class GameBoyTerminal:
                     continue
                 if isinstance(item, tuple) and item[0] == "__update_offer__":
                     self._offer_update(item[1])
+                    continue
+                if isinstance(item, tuple) and item[0] == "__silent__":
+                    self.append_output(item[1], speak=False)
                     continue
                 try:
                     self.append_output(item)
