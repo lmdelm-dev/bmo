@@ -1379,12 +1379,29 @@ class GameBoyTerminal:
             self._processing = False
             return
         text = self._transcribe(tmp)
+        text = self._fix_transcript(text)
         try:
             os.remove(tmp)
         except Exception:
             pass
         self._put(("__transcribed__", text))
         self._processing = False
+
+    def _fix_transcript(self, text):
+        if not text:
+            return text
+        t = " " + text.lower().strip() + " "
+        for bad, good in (
+            (" be more ", " BMO "),
+            (" beemo ", " BMO "),
+            (" be em oh ", " BMO "),
+            (" be em o ", " BMO "),
+            (" bemo ", " BMO "),
+            (" be mo ", " BMO "),
+            (" bmo ", " BMO "),
+        ):
+            t = t.replace(bad, good)
+        return t.strip()
 
     def _transcribe(self, wav_path):
         try:
@@ -1856,7 +1873,7 @@ class GameBoyTerminal:
 
     # ---- auto-updater (checks GitHub, installs if the user agrees) ----
 
-    APP_VERSION = "2.16"
+    APP_VERSION = "2.17"
     UPDATE_URL = "https://raw.githubusercontent.com/lmdelm-dev/bmo/main/gameboy.py"
     UPDATE_TARBALL = "https://codeload.github.com/lmdelm-dev/bmo/tar.gz/refs/heads/main"
 
