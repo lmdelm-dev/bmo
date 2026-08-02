@@ -1324,10 +1324,13 @@ class GameBoyTerminal:
 
     def _start_record(self):
         try:
-            tmp = os.path.join(tempfile.gettempdir(), "bmo_rec.wav")
+            tmp = os.path.join(tempfile.gettempdir(), "bmo_rec_%d.wav" % os.getpid())
             self._rec_file = tmp
-            if os.path.exists(tmp):
-                os.remove(tmp)
+            try:
+                if os.path.exists(tmp):
+                    os.remove(tmp)
+            except Exception:
+                pass
             if shutil.which("arecord"):
                 proc = subprocess.Popen(
                     ["arecord", "-q", "-f", "S16_LE", "-r", "16000", "-c", "1",
@@ -1346,7 +1349,7 @@ class GameBoyTerminal:
             self._put("  BMO: listening... hold to talk, release to send \u2665")
         except Exception as e:
             self._tlog("record start failed: %s" % e)
-            self._put("  BMO: could not start recording (is a mic plugged in?)")
+            self._put("  BMO: could not start recording (%s)" % e)
             self._put(("__mic_stop__", None))
             self._rec_proc = None
             self._listening = False
@@ -1873,7 +1876,7 @@ class GameBoyTerminal:
 
     # ---- auto-updater (checks GitHub, installs if the user agrees) ----
 
-    APP_VERSION = "2.17"
+    APP_VERSION = "2.18"
     UPDATE_URL = "https://raw.githubusercontent.com/lmdelm-dev/bmo/main/gameboy.py"
     UPDATE_TARBALL = "https://codeload.github.com/lmdelm-dev/bmo/tar.gz/refs/heads/main"
 
