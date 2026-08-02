@@ -1232,10 +1232,11 @@ class GameBoyTerminal:
                 if e.code == 404:
                     self._put(("__brain_start__", None))
                     ok = self._pull_model()
-                    self._put(("__brain_stop__", None))
                     if not ok:
+                        self._put(("__brain_stop__", None))
                         self._put("  BMO: still can't reach the model. Try: ollama pull " + self.ai_model)
                         return
+                    self._put(("__brain_done__", None))
                     try:
                         reply = self._ollama_chat(msgs)
                     except Exception:
@@ -1440,7 +1441,7 @@ class GameBoyTerminal:
 
     # ---- auto-updater (checks GitHub, installs if the user agrees) ----
 
-    APP_VERSION = "2.9"
+    APP_VERSION = "2.10"
     UPDATE_URL = "https://raw.githubusercontent.com/lmdelm-dev/bmo/main/gameboy.py"
     UPDATE_TARBALL = "https://codeload.github.com/lmdelm-dev/bmo/tar.gz/refs/heads/main"
 
@@ -1649,6 +1650,10 @@ class GameBoyTerminal:
                     continue
                 if isinstance(item, tuple) and item[0] == "__brain_stop__":
                     self._stop_brain_download()
+                    continue
+                if isinstance(item, tuple) and item[0] == "__brain_done__":
+                    self.clear_output()
+                    self.append_output("  BMO: Hey, everything's done! I'm all set and ready to chat \u2665")
                     continue
                 if item == "__update_applied__":
                     self._relaunch()
