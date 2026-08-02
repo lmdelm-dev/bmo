@@ -97,6 +97,8 @@ class GameBoyTerminal:
         self._rec_file = None
         self._listening = False
         self._processing = False
+        self._rec_start = 0
+        self._rec_short = False
         self._brain_msg = self._BRAIN_MSG
 
         self.term_active = False
@@ -1212,14 +1214,34 @@ class GameBoyTerminal:
             self.append_output("  BMO: I can't listen yet - install vosk: pip install vosk")
             return
         self._listening = True
+        self._rec_start = time.time()
+        self._set_mic_state(True)
         threading.Thread(target=self._start_record, daemon=True).start()
 
     def mic_release(self, event=None):
         if not self._listening:
             return
         self._listening = False
+        self._rec_short = (time.time() - self._rec_start) < 0.4
+        self._set_mic_state(False)
         self._processing = True
         threading.Thread(target=self._finish_record, daemon=True).start()
+
+    def _set_mic_state(self, recording):
+        try:
+            btn = self.mic_btn
+            if recording:
+                btn.btn_color = "#FF5B7A"
+                btn.btn_hover = "#FF5B7A"
+                btn.btn_text = "REC"
+            else:
+                btn.btn_color = "#F20553"
+                btn.btn_hover = "#C00445"
+                btn.btn_text = "MIC"
+            btn.btn_text_color = "#FFFFFF"
+            self.draw_round_btn(btn)
+        except Exception:
+            pass
 
     def _start_record(self):
         try:
@@ -1237,12 +1259,16 @@ class GameBoyTerminal:
                     ["parecord", "--channels=1", "--rate=16000", "--format=s16le", tmp],
                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             else:
-                self._put("  BMO: no recorder found (need arecord or parecord)")
+                self._put("  BMO: no recorder found - I need arecord or parecord to listen")
+                self._put(("__mic_stop__", None))
                 self._listening = False
                 return
             self._rec_proc = proc
+            self._put("  BMO: listening... hold to talk, release to send \u2665")
         except Exception as e:
             self._tlog("record start failed: %s" % e)
+            self._put("  BMO: could not start recording (is a mic plugged in?)")
+            self._put(("__mic_stop__", None))
             self._rec_proc = None
             self._listening = False
 
@@ -1266,6 +1292,10 @@ class GameBoyTerminal:
                     pass
         tmp = self._rec_file
         self._rec_file = None
+        if self._rec_short:
+            self._put("  BMO: that was too quick! hold the MIC button while you talk \u2665")
+            self._processing = False
+            return
         if not tmp or not os.path.exists(tmp) or os.path.getsize(tmp) < 1000:
             self._processing = False
             return
@@ -1274,8 +1304,7 @@ class GameBoyTerminal:
             os.remove(tmp)
         except Exception:
             pass
-        if text:
-            self._put(("__transcribed__", text))
+        self._put(("__transcribed__", text))
         self._processing = False
 
     def _transcribe(self, wav_path):
@@ -1748,7 +1777,7 @@ class GameBoyTerminal:
 
     # ---- auto-updater (checks GitHub, installs if the user agrees) ----
 
-    APP_VERSION = "2.13"
+    APP_VERSION = "2.14"
     UPDATE_URL = "https://raw.githubusercontent.com/lmdelm-dev/bmo/main/gameboy.py"
     UPDATE_TARBALL = "https://codeload.github.com/lmdelm-dev/bmo/tar.gz/refs/heads/main"
 
@@ -1977,6 +2006,9 @@ class GameBoyTerminal:
                         self.submit()
                     else:
                         self.append_output("  BMO: Hmm, I didn't catch that. Can you say it again?")
+                    continue
+                if item == "__mic_stop__":
+                    self._set_mic_state(False)
                     continue
                 if item == "__update_applied__":
                     self._relaunch()
