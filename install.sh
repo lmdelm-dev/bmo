@@ -5,8 +5,8 @@
 #
 # The installer checks for, and installs when missing:
 #   - Python 3 + tkinter   (system package)
-#   - Pillow, python-xlib, vosk  (pip --user)
-#   - espeak-ng             (system package; powers BMO's voice)
+#   - Pillow, python-xlib, vosk, piper-tts  (pip --user)
+#   - espeak-ng             (system package; BMO's backup voice)
 #   - opencode              (curl -fsSL https://opencode.ai/install | bash)
 #   - xterm                 (system package; powers BMO's embedded terminal)
 #   - the Blue Water font   (shipped, fc-cache)
@@ -168,6 +168,12 @@ if ! python3 -c "import vosk" 2>/dev/null; then
     ( python3 -m pip install --user vosk >/dev/null 2>&1 || \
       python3 -m pip install --user --break-system-packages vosk >/dev/null 2>&1 ) || \
         echo "    (vosk install failed - hold-MIC talking disabled; fix later: pip install --user vosk)"
+fi
+if ! python3 -c "import piper" 2>/dev/null; then
+    echo "    installing piper-tts (BMO's human voice)..."
+    ( python3 -m pip install --user piper-tts >/dev/null 2>&1 || \
+      python3 -m pip install --user --break-system-packages piper-tts >/dev/null 2>&1 ) || \
+        echo "    (piper-tts install failed - BMO will use its older voice; fix later: pip install --user piper-tts)"
 fi
 
 # ----------------------------------------------------------------------------

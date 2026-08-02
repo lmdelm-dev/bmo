@@ -160,6 +160,14 @@ function bootstrapDeps() {
     catch (_) { try { sh(py, ["-m", "pip", "install", "--user", "--break-system-packages", "vosk"]); ok = true; } catch (__) {} }
     if (!ok) console.log("bmo: (vosk install failed - hold-MIC talking disabled; fix later: pip install --user vosk)");
   }
+  try { execFileSync(py, ["-c", "import piper"], { stdio: "ignore" }); }
+  catch (_) {
+    console.log("bmo: installing piper-tts (BMO's human voice)...");
+    let ok = false;
+    try { sh(py, ["-m", "pip", "install", "--user", "piper-tts"]); ok = true; }
+    catch (_) { try { sh(py, ["-m", "pip", "install", "--user", "--break-system-packages", "piper-tts"]); ok = true; } catch (__) {} }
+    if (!ok) console.log("bmo: (piper-tts install failed - BMO uses its older voice; fix later: pip install --user piper-tts)");
+  }
   return py;
 }
 

@@ -81,12 +81,13 @@ class GameBoyTerminal:
 
         self.voice_on = bool(self.memory.get("voice", True))
         try:
-            self.voice_pitch = max(0, min(99, int(self.memory.get("voice_pitch", 80))))
-            self.voice_speed = max(80, min(450, int(self.memory.get("voice_speed", 170))))
+            self.voice_pitch = max(0, min(99, int(self.memory.get("voice_pitch", 60))))
+            self.voice_speed = max(80, min(450, int(self.memory.get("voice_speed", 155))))
         except Exception:
-            self.voice_pitch = 80
-            self.voice_speed = 170
-        self.voice_variant = self.memory.get("voice_variant", "en-us+f3")
+            self.voice_pitch = 60
+            self.voice_speed = 155
+        self.voice_variant = self.memory.get("voice_variant", "en-us+f2")
+        self._piper_voice = None
         self._speak_queue = queue.Queue()
         self._speak_thread = None
         self._voice_lock = threading.Lock()
@@ -1107,19 +1108,96 @@ class GameBoyTerminal:
     def _say(self, text):
         try:
             with self._voice_lock:
-                bin_ = self._tts_bin()
-                if not bin_:
-                    return
                 clean = self._clean_speech(text)
                 if not clean:
                     return
                 lang = self._detect_lang(clean)
+                if lang == "en" and self._ensure_piper_model():
+                    self._play_piper(clean)
+                    return
+                bin_ = self._tts_bin()
+                if not bin_:
+                    return
                 voice = self.voice_variant if lang == "en" else self._VOICES.get(lang, self.voice_variant)
                 subprocess.run([bin_, "-v", voice,
                                 "-p", str(self.voice_pitch),
                                 "-s", str(self.voice_speed), clean],
                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                timeout=120)
+        except Exception:
+            pass
+
+    _PIPER_VOICE = "en_US-amy-medium"
+    _PIPER_URL_BASE = "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/amy/medium/en_US-amy-medium"
+
+    def _piper_dir(self):
+        return os.path.join(self.data_dir, "piper")
+
+    def _piper_model(self):
+        return os.path.join(self._piper_dir(), self._PIPER_VOICE + ".onnx")
+
+    def _piper_player(self):
+        return shutil.which("aplay") or shutil.which("paplay")
+
+    def _piper_ready(self):
+        try:
+            import piper  # noqa
+            return os.path.exists(self._piper_model()) and self._piper_player() is not None
+        except Exception:
+            return False
+
+    def _ensure_piper_model(self):
+        if os.path.exists(self._piper_model()):
+            return True
+        try:
+            import piper  # noqa
+        except Exception:
+            self._put("  BMO: my human voice needs piper-tts (pip install piper-tts)")
+            return False
+        if self._piper_player() is None:
+            return False
+        self._put(("__voice_start__", None))
+        try:
+            os.makedirs(self._piper_dir(), exist_ok=True)
+            for ext in (".onnx", ".onnx.json"):
+                urllib.request.urlretrieve(self._PIPER_URL_BASE + ext,
+                                           os.path.join(self._piper_dir(), self._PIPER_VOICE + ext))
+            return True
+        except Exception as e:
+            self._put("  BMO: couldn't download my voice (%s) - using my old voice" % e)
+            return False
+        finally:
+            self._put(("__voice_stop__", None))
+
+    def _play_piper(self, text):
+        try:
+            if self._piper_voice is None:
+                import piper
+                self._piper_voice = piper.PiperVoice.load(self._piper_model())
+            v = self._piper_voice
+            rate = int(getattr(v.config, "sample_rate", 22050))
+            player = self._piper_player()
+            if not player:
+                return
+            p = subprocess.Popen([player, "-q", "-f", "S16_LE", "-r", str(rate), "-c", "1"],
+                                 stdin=subprocess.PIPE,
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            try:
+                for chunk in v.synthesize(text):
+                    p.stdin.write(chunk)
+            except (BrokenPipeError, OSError):
+                pass
+            try:
+                p.stdin.close()
+            except Exception:
+                pass
+            try:
+                p.wait(timeout=60)
+            except Exception:
+                try:
+                    p.kill()
+                except Exception:
+                    pass
         except Exception:
             pass
 
@@ -1777,7 +1855,7 @@ class GameBoyTerminal:
 
     # ---- auto-updater (checks GitHub, installs if the user agrees) ----
 
-    APP_VERSION = "2.14"
+    APP_VERSION = "2.15"
     UPDATE_URL = "https://raw.githubusercontent.com/lmdelm-dev/bmo/main/gameboy.py"
     UPDATE_TARBALL = "https://codeload.github.com/lmdelm-dev/bmo/tar.gz/refs/heads/main"
 
@@ -1997,6 +2075,12 @@ class GameBoyTerminal:
                     self._start_brain_download("  please wait, downloading my ears...")
                     continue
                 if isinstance(item, tuple) and item[0] == "__ears_stop__":
+                    self._stop_brain_download()
+                    continue
+                if item == "__voice_start__":
+                    self._start_brain_download("  please wait, downloading my human voice...")
+                    continue
+                if item == "__voice_stop__":
                     self._stop_brain_download()
                     continue
                 if isinstance(item, tuple) and item[0] == "__transcribed__":
