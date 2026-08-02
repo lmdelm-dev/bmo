@@ -206,6 +206,11 @@ if need fc-cache; then
     fc-cache -f "$FONT_DIR" >/dev/null 2>&1 || true
 fi
 
+# BMO opencode theme + header logo (applies the next time opencode starts)
+if [ -f "$DEST/opencode/install.py" ]; then
+    python3 "$DEST/opencode/install.py" || echo "    (opencode theme install skipped)"
+fi
+
 # PATH hint
 case ":$PATH:" in
     *":$BIN_DIR:"*) ;;

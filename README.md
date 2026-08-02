@@ -24,6 +24,8 @@ with you, runs commands, and even speaks up on its own once in a while.
 - 😴 **Falls asleep** after 2 minutes of quiet (cute sleep face!) - wake it with a
   mouse move or any key
 - 🐚 **A real terminal** - run commands, `/mo` opens opencode, `/gmo` opens w3m
+- 🎨 **opencode gets BMO's look** - installing BMO themes opencode (BMO colors +
+  a BMO header logo), so `/mo` feels right at home
 - 🔄 **Self-updates** from GitHub (silently checks, asks before updating)
 
 ## Install

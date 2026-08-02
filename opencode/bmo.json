@@ -1,0 +1,217 @@
+{
+  "$schema": "https://opencode.ai/theme.json",
+  "defs": {
+    "bmo0": "#101E2B",
+    "bmo1": "#407C84",
+    "bmo2": "#63BDA4",
+    "bmo3": "#D9FFEA",
+    "bmo4": "#C6F0D9",
+    "bmo5": "#EAFDF3",
+    "bmo6": "#4A6B5C",
+    "bmo7": "#F20553",
+    "bmo8": "#0E5E52",
+    "bmo9": "#8FBFB3"
+  },
+  "theme": {
+    "primary": {
+      "dark": "bmo2",
+      "light": "bmo1"
+    },
+    "secondary": {
+      "dark": "bmo8",
+      "light": "bmo8"
+    },
+    "accent": {
+      "dark": "bmo7",
+      "light": "bmo7"
+    },
+    "error": {
+      "dark": "#C03333",
+      "light": "#C03333"
+    },
+    "warning": {
+      "dark": "#B26A00",
+      "light": "#B26A00"
+    },
+    "success": {
+      "dark": "#1E7A46",
+      "light": "#1E7A46"
+    },
+    "info": {
+      "dark": "bmo1",
+      "light": "bmo1"
+    },
+    "text": {
+      "dark": "bmo0",
+      "light": "bmo0"
+    },
+    "textMuted": {
+      "dark": "bmo6",
+      "light": "bmo6"
+    },
+    "background": {
+      "dark": "bmo3",
+      "light": "bmo3"
+    },
+    "backgroundPanel": {
+      "dark": "bmo4",
+      "light": "bmo4"
+    },
+    "backgroundElement": {
+      "dark": "bmo5",
+      "light": "bmo5"
+    },
+    "border": {
+      "dark": "bmo1",
+      "light": "bmo1"
+    },
+    "borderActive": {
+      "dark": "bmo2",
+      "light": "bmo2"
+    },
+    "borderSubtle": {
+      "dark": "bmo9",
+      "light": "bmo9"
+    },
+    "diffAdded": {
+      "dark": "bmo8",
+      "light": "bmo8"
+    },
+    "diffRemoved": {
+      "dark": "#C03333",
+      "light": "#C03333"
+    },
+    "diffContext": {
+      "dark": "bmo6",
+      "light": "bmo6"
+    },
+    "diffHunkHeader": {
+      "dark": "bmo1",
+      "light": "bmo1"
+    },
+    "diffHighlightAdded": {
+      "dark": "bmo8",
+      "light": "bmo8"
+    },
+    "diffHighlightRemoved": {
+      "dark": "#C03333",
+      "light": "#C03333"
+    },
+    "diffAddedBg": {
+      "dark": "#D8F5E3",
+      "light": "#D8F5E3"
+    },
+    "diffRemovedBg": {
+      "dark": "#F7D9D9",
+      "light": "#F7D9D9"
+    },
+    "diffContextBg": {
+      "dark": "bmo4",
+      "light": "bmo4"
+    },
+    "diffLineNumber": {
+      "dark": "bmo6",
+      "light": "bmo6"
+    },
+    "diffAddedLineNumberBg": {
+      "dark": "#D8F5E3",
+      "light": "#D8F5E3"
+    },
+    "diffRemovedLineNumberBg": {
+      "dark": "#F7D9D9",
+      "light": "#F7D9D9"
+    },
+    "markdownText": {
+      "dark": "bmo0",
+      "light": "bmo0"
+    },
+    "markdownHeading": {
+      "dark": "bmo1",
+      "light": "bmo1"
+    },
+    "markdownLink": {
+      "dark": "bmo1",
+      "light": "bmo1"
+    },
+    "markdownLinkText": {
+      "dark": "bmo8",
+      "light": "bmo8"
+    },
+    "markdownCode": {
+      "dark": "bmo8",
+      "light": "bmo8"
+    },
+    "markdownBlockQuote": {
+      "dark": "bmo6",
+      "light": "bmo6"
+    },
+    "markdownEmph": {
+      "dark": "#A8482F",
+      "light": "#A8482F"
+    },
+    "markdownStrong": {
+      "dark": "bmo7",
+      "light": "bmo7"
+    },
+    "markdownHorizontalRule": {
+      "dark": "bmo1",
+      "light": "bmo1"
+    },
+    "markdownListItem": {
+      "dark": "bmo2",
+      "light": "bmo1"
+    },
+    "markdownListEnumeration": {
+      "dark": "bmo2",
+      "light": "bmo1"
+    },
+    "markdownImage": {
+      "dark": "bmo9",
+      "light": "bmo9"
+    },
+    "markdownImageText": {
+      "dark": "bmo6",
+      "light": "bmo6"
+    },
+    "markdownCodeBlock": {
+      "dark": "bmo8",
+      "light": "bmo0"
+    },
+    "syntaxComment": {
+      "dark": "bmo6",
+      "light": "bmo6"
+    },
+    "syntaxKeyword": {
+      "dark": "bmo1",
+      "light": "bmo1"
+    },
+    "syntaxFunction": {
+      "dark": "#B26A00",
+      "light": "#B26A00"
+    },
+    "syntaxVariable": {
+      "dark": "bmo8",
+      "light": "bmo8"
+    },
+    "syntaxString": {
+      "dark": "#1E7A46",
+      "light": "#1E7A46"
+    },
+    "syntaxNumber": {
+      "dark": "#C03333",
+      "light": "#C03333"
+    },
+    "syntaxType": {
+      "dark": "bmo1",
+      "light": "bmo1"
+    },
+    "syntaxOperator": {
+      "dark": "#A8482F",
+      "light": "#A8482F"
+    },
+    "syntaxPunctuation": {
+      "dark": "bmo0",
+      "light": "bmo0"
+    }
+  }
+}

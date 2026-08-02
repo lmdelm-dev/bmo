@@ -144,6 +144,7 @@ function install() {
   if (fs.existsSync(APP_FILE)) {
     console.log("bmo: already installed in", DIST);
     bootstrapDeps();
+    installOpenCodeTheme();
     installDesktopIcon();
     return;
   }
@@ -169,7 +170,22 @@ function install() {
 
   bootstrapDeps();
   console.log("bmo: installed. Run 'bmo' to start.");
+  installOpenCodeTheme();
   installDesktopIcon();
+}
+
+// Install the BMO theme + header logo into opencode's config
+// (~/.config/opencode) so opencode matches BMO's look.
+function installOpenCodeTheme() {
+  const script = path.join(DIST, "opencode", "install.py");
+  if (!fs.existsSync(script)) return;
+  try {
+    const py = pythonBin();
+    execFileSync(py, [script], { stdio: "inherit" });
+    console.log("bmo: opencode theme + BMO logo installed (applies next time opencode starts).");
+  } catch (_) {
+    console.log("bmo: (could not install opencode theme/logo)");
+  }
 }
 
 // Ship the Blue Water logo font into the per-user font dir and refresh the cache
