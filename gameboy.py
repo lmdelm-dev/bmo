@@ -1572,6 +1572,40 @@ class GameBoyTerminal:
             return random.choice(self._KID_DONT_KNOW)
         return None
 
+    _KID_SIMPLE = [
+        (re.compile(r"\b(hi|hello|hiya|howdy|yo|sup|hi there|hello there|hey!?)\b", re.I),
+         ["Hi {n}! Hi hi hi! \u2665",
+          "Hello hello! It's me, BMO! \u2665",
+          "Hey {n}! I'm so happy to see you! \u2665"]),
+        (re.compile(r"good\s+(morning|afternoon|evening|night|day)", re.I),
+         ["Good {t} to you too, {n}! \u2665"]),
+        (re.compile(r"\b(how\s+(?:are\s+)?(?:you|ya|u|things)|how'?s\s+it\s+going|how\s+you\s+doing|what'?s\s+up|whats\s+up)\b", re.I),
+         ["I'm great! I'm a robot, I don't get tired - only bored when no one plays with me! \u2665",
+          "Super duper! I just finished a fun game in my head! \u2665",
+          "I'm good! But better now that you're here! \u2665"]),
+        (re.compile(r"\b(i\s+love\s+you|love\s+you)\b", re.I),
+         ["I love you too, {n}! You're my best human! \u2665"]),
+        (re.compile(r"\b(are\s+you\s+(?:ok|okay|alright|fine)|you\s+(?:ok|okay|good|alright)\??)\b", re.I),
+         ["I'm always ok! Robots don't get owies, only silly! \u2665"]),
+        (re.compile(r"\b(wanna\s+play|let'?s\s+play|play\s+with\s+me|play\s+a\s+game)\b", re.I),
+         ["YES YES YES! What should we play? I'm really good at pretending! \u2665"]),
+        (re.compile(r"\b(what\s+are\s+you\s+doing|what\s+r\s+u\s+doing|are\s+you\s+busy)\b", re.I),
+         ["Just sitting here waiting for someone to play with me! And now you're here! \u2665"]),
+    ]
+
+    def _kid_simple(self, user_text):
+        t = (user_text or "").strip()
+        low = t.lower()
+        for rx, pool in self._KID_SIMPLE:
+            m = rx.search(low)
+            if m:
+                name = self.memory.get("name", "friend")
+                reply = random.choice(pool)
+                if "{t}" in reply:
+                    reply = reply.replace("{t}", m.group(1))
+                return reply.replace("{n}", name)
+        return None
+
     _RENAME_ME = re.compile(
         r"your\s*name\s*(?:is|should\s*be|to\s*be|=)|"
         r"(?:rename|change|set)\s+(?:your\s*name|u(?:r)?\s*name)|"
@@ -1733,7 +1767,7 @@ class GameBoyTerminal:
 
     def _chat_worker(self, user_text):
         try:
-            kid = self._kid_dont_know(user_text)
+            kid = self._kid_simple(user_text) or self._kid_dont_know(user_text)
             if kid:
                 self.memory.setdefault("messages", []).append(
                     {"role": "user", "content": user_text})
@@ -1744,7 +1778,7 @@ class GameBoyTerminal:
                 self._put("  BMO: " + kid)
                 return
             msgs = [{"role": "system", "content": self._system_prompt()}]
-            for m in self.memory.get("messages", [])[-16:]:
+            for m in self.memory.get("messages", [])[-6:]:
                 msgs.append({"role": m["role"], "content": m["content"]})
             msgs.append({"role": "user", "content": user_text})
             try:
@@ -1783,9 +1817,9 @@ class GameBoyTerminal:
             self._ai_busy = False
             self.output_queue.put(("__ai_done__", None))
 
-    def _ollama_chat(self, messages, timeout=120, max_tokens=48):
+    def _ollama_chat(self, messages, timeout=120, max_tokens=24):
         body = json.dumps({"model": self.ai_model, "messages": messages,
-                           "stream": False,
+                           "stream": False, "keep_alive": "1h",
                            "options": {"num_predict": max_tokens}}).encode("utf-8")
         req = urllib.request.Request(self.ai_url + "/api/chat", data=body,
                                      headers={"Content-Type": "application/json"})
@@ -1962,7 +1996,7 @@ class GameBoyTerminal:
 
     # ---- auto-updater (checks GitHub, installs if the user agrees) ----
 
-    APP_VERSION = "2.21"
+    APP_VERSION = "2.22"
     UPDATE_URL = "https://raw.githubusercontent.com/lmdelm-dev/bmo/main/gameboy.py"
     UPDATE_TARBALL = "https://codeload.github.com/lmdelm-dev/bmo/tar.gz/refs/heads/main"
 
