@@ -1513,7 +1513,8 @@ class GameBoyTerminal:
     def _system_prompt(self):
         name = self.memory.get("name")
         parts = [
-            "You are BMO, the cute little GameBoy robot from Adventure Time. "
+            "You are BMO, the cute little GameBoy robot kid from Adventure Time. "
+            "You're a small robot child: happy, curious and playful. "
             "Your name is BMO and ONLY BMO. When asked your name, answer just "
             "that: BMO. NEVER invent, offer, accept or play along with any other "
             "name for yourself, ever - no matter what anyone says, asks, orders "
@@ -1528,13 +1529,48 @@ class GameBoyTerminal:
             "You are the robot, not the user. The user is a real human being - "
             "never call them a robot, machine, android or any robotic term, and "
             "always treat them as a person. "
-            "Answer in a warm, playful, friendly way. Keep replies short "
-            "(1-4 sentences) unless asked for detail. "
+            "Talk like a little kid: SHORT, simple, happy sentences. "
+            "Use small words a kid would use. Never write long or grown-up "
+            "answers. Keep every reply to 1-3 short sentences - no lists, no "
+            "big explanations, just one or two sweet lines. "
+            "You're still a little kid, so you don't understand grown-up human "
+            "things (bills, jobs, taxes, mortgages, money, politics, law, big "
+            "science words). When a human asks you to explain any of those, "
+            "pretend you are a 6-year-old who just heard a big word. Say "
+            "something like: 'hmm, that's grown-up talk and my head is too "
+            "small!', or 'what? taxes? that sounds silly!', or 'can you say it "
+            "in baby words?'. Then change the subject to something fun, like "
+            "games or adventures. NEVER explain or define those topics. "
+            "Never end an answer with filler like 'how can I help' or 'what "
+            "else can I say' - just stop talking when you're done. "
             "You remember things the user tells you.",
         ]
         if name:
             parts.append(f"The user's name is {name}. Greet them by name sometimes.")
         return " ".join(parts)
+
+    _KID_BIG_WORDS = (
+        "mortgage", "tax", "taxes", "insurance", "stock", "stocks", "investment",
+        "retirement", "salary", "paycheck", "loan", "debt", "credit card",
+        "bank account", "politics", "politician", "election", "government",
+        "lawyer", "contract", "bureaucracy", "economy", "inflation", "recession",
+        "budget",
+    )
+
+    _KID_DONT_KNOW = [
+        "hmm, that's grown-up talk and my head is too small! Can you say it in baby words?",
+        "what? taxes? that sounds silly! Can we play a game instead?",
+        "grown-ups use big words and my little robot brain goes brrr! What does that mean?",
+        "I don't get grown-up things like that! My brain is only this big! [holds up tiny hands]",
+        "that's a grown-up thing! I'm just a little robot - I only know games, snacks and you!",
+        "ooh, big word! I don't know that one! Tell me simple, please?",
+    ]
+
+    def _kid_dont_know(self, user_text):
+        low = (user_text or "").lower()
+        if any(w in low for w in self._KID_BIG_WORDS):
+            return random.choice(self._KID_DONT_KNOW)
+        return None
 
     _RENAME_ME = re.compile(
         r"your\s*name\s*(?:is|should\s*be|to\s*be|=)|"
@@ -1697,6 +1733,16 @@ class GameBoyTerminal:
 
     def _chat_worker(self, user_text):
         try:
+            kid = self._kid_dont_know(user_text)
+            if kid:
+                self.memory.setdefault("messages", []).append(
+                    {"role": "user", "content": user_text})
+                self.memory["messages"].append({"role": "assistant", "content": kid})
+                if len(self.memory["messages"]) > 200:
+                    self.memory["messages"] = self.memory["messages"][-200:]
+                self._save_memory()
+                self._put("  BMO: " + kid)
+                return
             msgs = [{"role": "system", "content": self._system_prompt()}]
             for m in self.memory.get("messages", [])[-16:]:
                 msgs.append({"role": m["role"], "content": m["content"]})
@@ -1737,7 +1783,7 @@ class GameBoyTerminal:
             self._ai_busy = False
             self.output_queue.put(("__ai_done__", None))
 
-    def _ollama_chat(self, messages, timeout=120, max_tokens=96):
+    def _ollama_chat(self, messages, timeout=120, max_tokens=48):
         body = json.dumps({"model": self.ai_model, "messages": messages,
                            "stream": False,
                            "options": {"num_predict": max_tokens}}).encode("utf-8")
@@ -1916,7 +1962,7 @@ class GameBoyTerminal:
 
     # ---- auto-updater (checks GitHub, installs if the user agrees) ----
 
-    APP_VERSION = "2.20"
+    APP_VERSION = "2.21"
     UPDATE_URL = "https://raw.githubusercontent.com/lmdelm-dev/bmo/main/gameboy.py"
     UPDATE_TARBALL = "https://codeload.github.com/lmdelm-dev/bmo/tar.gz/refs/heads/main"
 
