@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /*
  * BMO npm/bun CLI.
- *   bmo             -> launch BMO (gameboy.py)
+ *   bmo             -> launch BMO (bmo.py)
  *   bmo --install   -> download BMO source + assets into ./dist and ensure deps
  *                      (run automatically via package.json postinstall)
  *
@@ -17,7 +17,7 @@ const path = require("path");
 
 const PKG_DIR = __dirname;
 const DIST = path.join(PKG_DIR, "dist");
-const APP_FILE = path.join(DIST, "gameboy.py");
+const APP_FILE = path.join(DIST, "bmo.py");
 
 const REPO = "https://github.com/lmdelm-dev/bmo";
 const BRANCH = "main";

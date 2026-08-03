@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # BMO - GameBoy terminal launcher
-# Resolves its install directory, then runs gameboy.py with the right python.
+# Resolves its install directory, then runs the app with the right python.
 set -euo pipefail
 
 # Allow override (set by installers / package managers)
-if [ -n "${BMO_HOME:-}" ] && [ -f "$BMO_HOME/gameboy.py" ]; then
+if [ -n "${BMO_HOME:-}" ] && [ -f "$BMO_HOME/bmo.py" ]; then
     APP_DIR="$BMO_HOME"
 else
     # this script may be a symlink in PATH -> resolve to real location
@@ -32,4 +32,10 @@ if [ -z "$PY" ]; then
     exit 1
 fi
 
-exec "$PY" "$APP_DIR/gameboy.py" "$@"
+# prefer the real entry; fall back to the legacy single-file name
+if [ -f "$APP_DIR/bmo.py" ]; then
+    ENTRY="$APP_DIR/bmo.py"
+else
+    ENTRY="$APP_DIR/gameboy.py"
+fi
+exec "$PY" "$ENTRY" "$@"

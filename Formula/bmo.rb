@@ -16,13 +16,15 @@ class Bmo < Formula
   depends_on "python@3.12"
 
   def install
-    # Ship the Python app + assets to libexec
-    libexec.install "gameboy.py", "assets"
+    # Ship the Python app (multi-module layout) + assets to libexec
+    libexec.install "bmo.py", "bmo_app.py", "bmo_ai.py", "bmo_voice.py",
+                    "bmo_update.py", "bmo_shell.py", "bmo_config.py",
+                    "bmo_secure.py", "gameboy.py", "assets"
     # Keep the repo launcher as-is for reference, but create a proper wrapper
     (bin/"bmo").write <<~EOS
       #!/bin/bash
       export BMO_HOME="#{libexec}"
-      exec "#{Formula["python@3.12"].opt_bin}/python3" "#{libexec}/gameboy.py" "$@"
+      exec "#{Formula["python@3.12"].opt_bin}/python3" "#{libexec}/bmo.py" "$@"
     EOS
     chmod 0755, bin/"bmo"
 
@@ -33,6 +35,6 @@ class Bmo < Formula
 
   test do
     system "#{Formula["python@3.12"].opt_bin}/python3",
-           "-m", "py_compile", "#{libexec}/gameboy.py"
+           "-m", "py_compile", "#{libexec}/bmo.py"
   end
 end

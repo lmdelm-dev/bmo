@@ -201,7 +201,7 @@ fi
 echo "==> installing BMO..."
 mkdir -p "$DEST" "$BIN_DIR" "$ICON_DIR" "$APP_DIR" "$FONT_DIR"
 
-if [ -d "$DEST/.git" ] || [ -f "$DEST/gameboy.py" ]; then
+if [ -d "$DEST/.git" ] || [ -f "$DEST/gameboy.py" ] || [ -f "$DEST/bmo.py" ]; then
     echo "    refreshing existing install at $DEST"
     rm -rf "${DEST:?}/"*
 fi
@@ -220,7 +220,7 @@ export BMO_HOME="$DEST"
 if [ -x "\$HOME/.opencode/bin/opencode" ]; then
     export PATH="\$HOME/.opencode/bin:\$PATH"
 fi
-exec python3 "$DEST/gameboy.py" "\$@"
+exec python3 "$DEST/bmo.py" "\$@"
 EOF
 chmod +x "$BIN_DIR/bmo"
 
