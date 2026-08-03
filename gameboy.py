@@ -1442,8 +1442,21 @@ class GameBoyTerminal:
             (" bemo ", " BMO "),
             (" be mo ", " BMO "),
             (" bmo ", " BMO "),
+            (" living now ", " leaving now "),
+            (" living soon ", " leaving soon "),
+            (" living today ", " leaving today "),
+            (" living tonight ", " leaving tonight "),
+            (" living tomorrow ", " leaving tomorrow "),
+            (" living bye ", " leaving bye "),
+            (" living right now ", " leaving right now "),
+            (" thrue ", " through "),
+            (" thru ", " through "),
+            (" how are your ", " how are you "),
+            (" how's your ", " how are you "),
+            (" whatsapp ", " what's up "),
         ):
             t = t.replace(bad, good)
+        t = re.sub(r"\b(i'?m|i am|im)\s+living\b", "I'm leaving", t)
         return t.strip()
 
     def _transcribe(self, wav_path):
@@ -1573,6 +1586,10 @@ class GameBoyTerminal:
         return None
 
     _KID_SIMPLE = [
+        (re.compile(r"\b(goodbye|good bye|by bye|bye[!.]*$|\bbye\b|see\s+(?:you|ya)|got?ta\s+go|gotta\s+go|i'?m\s+leaving|im\s+leaving|leaving\s+now|going\s+now|talk\s+to\s+you\s+later)\b", re.I),
+         ["Bye bye, {n}! Come back soon, okay? I'll miss you! \u2665",
+          "Goodbye {n}! Play with me again soon! \u2665",
+          "Bye! I'll be right here waiting when you come back! \u2665"]),
         (re.compile(r"\b(hi|hello|hiya|howdy|yo|sup|hi there|hello there|hey!?)\b", re.I),
          ["Hi {n}! Hi hi hi! \u2665",
           "Hello hello! It's me, BMO! \u2665",
@@ -1996,7 +2013,7 @@ class GameBoyTerminal:
 
     # ---- auto-updater (checks GitHub, installs if the user agrees) ----
 
-    APP_VERSION = "2.22"
+    APP_VERSION = "2.23"
     UPDATE_URL = "https://raw.githubusercontent.com/lmdelm-dev/bmo/main/gameboy.py"
     UPDATE_TARBALL = "https://codeload.github.com/lmdelm-dev/bmo/tar.gz/refs/heads/main"
 
