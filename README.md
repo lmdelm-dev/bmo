@@ -95,7 +95,7 @@ cd bmo
 - `install.sh` - the curl installer
 - `package.json` + `cli.js` - the npm/bun package
 - `Formula/bmo.rb` - Homebrew formula
-- `scripts/release.sh` + `.github/workflows/ci.yml` - release checksums + CI
+- `scripts/release.sh` + `.circleci/config.yml` - release checksums + CI (free open-source CircleCI, replaces GitHub Actions)
 
 ## License
 
