@@ -15,8 +15,9 @@ with you, runs commands, and even speaks up on its own once in a while.
 
 ## Why BMO is great
 
-- 🧠 **A real AI friend** - fully local & offline (via Ollama), free, no API key,
-  nothing leaves your machine
+- 🧠 **A real AI friend** - BMO talks through **opencode**, so it can answer
+  anything and even use tools. Free, no API keys (just sign in to a free provider
+  once: `opencode providers`)
 - 💭 **Remembers you** - your name and what you tell it (`~/.local/share/bmo/chat.json`)
 - 💬 **Talks first** sometimes, asking about things you've mentioned ("so you like
   hiking? tell me more!")
@@ -87,8 +88,10 @@ cd bmo
 - The blue **_** button minimizes (bring it back with **Ctrl+Alt+B**), the red **X** closes BMO
 - Idle for **2 minutes** and BMO falls asleep - just move the mouse or press a key to wake it up
 
-> **First chat?** BMO downloads a small model (`qwen2.5:0.5b`, ~400MB) once via
-> Ollama, then everything is free and offline forever.
+> **First chat?** Make sure `opencode` is installed and you've signed in to a
+> provider (`opencode providers`). BMO connects to its opencode "brain" on
+> chatter away - no local model to download. Type `/model <provider/model>`
+> anytime to switch brains.
 
 ## For maintainers
 

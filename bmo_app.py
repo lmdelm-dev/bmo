@@ -17,8 +17,6 @@ import sys
 import tempfile
 import threading
 import time
-import urllib.request
-import urllib.error
 
 try:
     from Xlib import display
@@ -84,10 +82,9 @@ class GameBoyTerminal(UpdateMixin, ShellMixin, VoiceMixin, AIMixin):
             self.history_idx = 0
             self.ansi_re = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
-            # AI friend state (Ollama, local + offline)
-            self.ai_model = "qwen2.5:0.5b"
-            self.ai_url = "http://localhost:11434"
+            # AI friend state (opencode brain, online)
             self._ai_busy = False
+            self._stream_mark = None
             self.data_dir = os.path.join(os.path.expanduser("~"), ".local", "share", "bmo")
             self.mem_file = os.path.join(self.data_dir, "chat.json")
             self.memory = self._load_memory()
@@ -908,6 +905,32 @@ class GameBoyTerminal(UpdateMixin, ShellMixin, VoiceMixin, AIMixin):
                 except Exception:
                     pass
 
+    def _end_index(self):
+            try:
+                return self.output.index("end-1c")
+            except Exception:
+                return "end"
+
+    def _set_status(self, text):
+            try:
+                self.status_label.configure(text=text)
+            except Exception:
+                pass
+
+    def _stream_output(self, text):
+            if self._stream_mark is None:
+                self.append_output("  BMO: " + text)
+                return
+            try:
+                self.output.configure(state="normal")
+                self.output.delete(self._stream_mark, "end-1c")
+                self.output.insert(self._stream_mark, "  BMO: " + text)
+                self.output.see("end")
+                self.output.configure(state="disabled")
+            except Exception:
+                self.append_output("  BMO: " + text)
+
+
     _BRAIN_CAT = [
             ["  \u2588\u2588   \u2588\u2588",
              " \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588",
@@ -1059,15 +1082,18 @@ class GameBoyTerminal(UpdateMixin, ShellMixin, VoiceMixin, AIMixin):
 
     def cmd_forget(self):
             self.memory = {"name": self.memory.get("name", ""), "messages": []}
+            self.memory.pop("oc_session", None)
             self._save_memory()
             self.append_output("  BMO: Ok, I'll forget our chats... but I still remember you! \u2665")
 
     def cmd_model(self, arg=None):
             if arg:
-                self.ai_model = arg
-                self.append_output(f"  BMO: model set to {arg}. (pull it first: ollama pull {arg})")
+                self.memory["oc_model"] = arg
+                self._save_memory()
+                self.append_output(f"  BMO: my brain is now {arg}. \u2665")
                 return
-            self.append_output(f"  BMO: current model: {self.ai_model}  (change: /model <name>)")
+            self.append_output(f"  BMO: my brain is online via opencode -> {self.oc_model()}")
+            self.append_output("       (switch it: /model <provider/model>)")
 
     def _load_memory(self):
             try:
@@ -1094,6 +1120,7 @@ class GameBoyTerminal(UpdateMixin, ShellMixin, VoiceMixin, AIMixin):
             return any(os.path.basename(w) in self.INTERACTIVE for w in words)
 
     def clear_output(self):
+            self._stream_mark = None
             self._stop_thinking()
             self._stop_brain_download()
             self.output.configure(state="normal")
@@ -1102,15 +1129,15 @@ class GameBoyTerminal(UpdateMixin, ShellMixin, VoiceMixin, AIMixin):
 
     def show_help(self):
             self.append_output("  BMO - your GameBoy friend \u2665")
-            self.append_output("  Just type something and I'll chat with you! (local AI,")
-            self.append_output("  free + offline via Ollama, no API key).")
+            self.append_output("  Chat with me by typing! My brain is online via opencode,")
+            self.append_output("  so I can answer anything (and even use my tools).")
             self.append_output("")
             self.append_output("  Commands start with '/' :")
             self.append_output("    /help            - this screen")
             self.append_output("    /name <name>     - tell me your name")
             self.append_output("    /memory          - what I remember")
             self.append_output("    /forget          - clear chat memory")
-            self.append_output("    /model [name]    - show/change AI model")
+            self.append_output("    /model [name]    - show/change brain model")
             self.append_output("    /voice on|off    - BMO talks out loud (hold MIC to talk to him)")
             self.append_output("    /voice test      - hear my voice (pitch/speed/variant to tune it)")
             self.append_output("    /talk on|off     - BMO chats on his own")
@@ -1142,7 +1169,16 @@ class GameBoyTerminal(UpdateMixin, ShellMixin, VoiceMixin, AIMixin):
                     if item == "__proactive_next__":
                         self._schedule_proactive()
                         continue
+                    if isinstance(item, tuple) and item[0] == "__ai_stream_init__":
+                        self._stop_thinking()
+                        self._stream_mark = self._end_index()
+                        self._set_status("  BMO is answering \u2665")
+                        continue
+                    if isinstance(item, tuple) and item[0] == "__ai_stream__":
+                        self._stream_output(item[1])
+                        continue
                     if isinstance(item, tuple) and item[0] == "__ai_done__":
+                        self._stream_mark = None
                         self._stop_thinking()
                         self.register_activity()
                         continue
@@ -1211,7 +1247,7 @@ class GameBoyTerminal(UpdateMixin, ShellMixin, VoiceMixin, AIMixin):
                 self.append_output("  BMO: Hi! I'm BMO, your GameBoy friend! ♥")
                 self.append_output("       What's your name? (just type it)")
                 if not self._ai_available():
-                    self.append_output("       (chat needs Ollama: curl -fsSL https://ollama.com/install.sh | sh)")
+                    self.append_output("       (I chat via opencode: curl -fsSL https://opencode.ai/install | bash)")
             else:
                 self.append_output(f"  BMO: Hey {name}! Good to see you! ♥")
             self.append_output("")

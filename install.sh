@@ -144,30 +144,20 @@ if [ "$(uname -s)" = "Darwin" ] && ! need sox; then
     brew install sox 2>/dev/null || echo "    (sox install failed - BMO keeps its normal voice)"
 fi
 
-# --- opencode (powers the 'mo' command) ---
+# --- opencode (BMO's brain - powers chat + the 'mo' command) ---
 if ! need opencode; then
-    echo "    opencode is missing (powers the 'mo' shortcut)."
+    echo "    opencode is missing (BMO's AI brain - it powers chat and 'mo')."
+    echo "    Free to install; BMO will guide you to sign in to a provider on first chat."
     if ask "    Install opencode via curl -fsSL https://opencode.ai/install | bash?"; then
         bash -c "curl -fsSL https://opencode.ai/install | bash" || \
-            echo "    (opencode install failed - 'mo' will use opencode from PATH if you install it later)"
+            echo "    (opencode install failed - install it later so BMO can think)"
         # opencode installs to ~/.opencode/bin; make sure it's reachable this session
         [ -d "$HOME/.opencode/bin" ] && case ":$PATH:" in
             *":$HOME/.opencode/bin:"*) ;;
             *) export PATH="$HOME/.opencode/bin:$PATH" ;;
         esac
     fi
-    need opencode || echo "    continuing without opencode ('mo' will look for opencode on PATH)"
-fi
-
-# --- Ollama (powers BMO's AI friend chat; optional, local + offline) ---
-if ! need ollama; then
-    echo "    Ollama not found (optional - it powers BMO's AI chat friend)."
-    echo "    Free + offline, no API key. First chat downloads a small model (~400MB)."
-    if ask "    Install Ollama via curl -fsSL https://ollama.com/install.sh | sh?"; then
-        bash -c "curl -fsSL https://ollama.com/install.sh | sh" || \
-            echo "    (Ollama install failed - BMO will show the install command on first chat)"
-    fi
-    need ollama || echo "    continuing without Ollama (BMO chat will guide you on first use)"
+    need opencode || echo "    continuing without opencode (BMO will show the install command on first chat)"
 fi
 
 # --- pip libs (Pillow face-saver; python-xlib minimize/restore hotkey on Linux) ---

@@ -6,7 +6,7 @@ APP_VERSION is the single source of truth. The auto-updater reads this file
 
 import os
 
-APP_VERSION = "3.0"
+APP_VERSION = "3.1"
 
 # Entry point for the app (name that launchers execute).
 APP_ENTRY = "bmo.py"

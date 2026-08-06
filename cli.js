@@ -111,29 +111,19 @@ function bootstrapDeps() {
     catch (_) { console.log("bmo: (espeak install failed - text-only for now)"); }
   }
 
-  // --- opencode (powers the 'mo' shortcut) ---
+  // --- opencode (BMO's brain: powers chat + the 'mo' shortcut) ---
   if (!have("opencode")) {
     console.log("bmo: opencode missing - installing via curl -fsSL https://opencode.ai/install | bash ...");
     const ok = isWin
       ? spawnSync("powershell", ["-NoProfile", "-Command",
           "iwr -UseBasicParsing https://opencode.ai/install.ps1 | iex"], { stdio: "inherit" })
       : spawnSync("bash", ["-c", "curl -fsSL https://opencode.ai/install | bash"], { stdio: "inherit" });
-    if (ok.status !== 0) console.log("bmo: (opencode install failed - 'mo' will look for opencode on PATH)");
+    if (ok.status !== 0) console.log("bmo: (opencode install failed - install it later so BMO can think)");
     // ~/.opencode/bin may now exist; surface it for this process + later launches
     const oc = path.join(os.homedir(), ".opencode", "bin");
     if (fs.existsSync(oc)) process.env.PATH = oc + path.delimiter + process.env.PATH;
-  }
-
-  // --- Ollama (BMO's AI friend chat; optional, free + offline) ---
-  if (!have("ollama")) {
-    console.log("bmo: Ollama not found (optional - powers BMO's AI chat friend, free + offline).");
-    if (process.platform !== "win32") {
-      spawnSync("bash", ["-c", "curl -fsSL https://ollama.com/install.sh | sh"], { stdio: "inherit" });
-    } else {
-      console.log("bmo:  install Ollama from https://ollama.com/download");
-    }
-    if (!have("ollama")) {
-      console.log("bmo: (BMO chat will guide you on first use; model downloads on first chat)");
+    if (!have("opencode")) {
+      console.log("bmo: (BMO chat will guide you to install opencode + sign in to a provider)");
     }
   }
 

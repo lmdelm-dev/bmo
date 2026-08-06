@@ -1,63 +1,51 @@
-"""BMO AI chat mixin - Ollama chat, kid persona, proactive talk."""
+"""BMO AI chat mixin - opencode chat brain, kid persona, proactive talk."""
 
 import json
 import os
 import random
 import re
+import shutil
 import subprocess
 import threading
 import time
-import urllib.error
-import urllib.request
+
+import bmo_config as config
 
 
 class AIMixin:
+    OC_MODEL = "opencode/deepseek-v4-flash-free"
+
+    OC_AGENT = "bmo"
+
     def _ai_available(self):
             try:
-                req = urllib.request.Request(self.ai_url + "/api/tags", method="GET")
-                with urllib.request.urlopen(req, timeout=2) as r:
-                    return r.status == 200
+                return shutil.which("opencode") is not None
             except Exception:
                 return False
 
-    def _system_prompt(self):
-            name = self.memory.get("name")
-            parts = [
-                "You are BMO, the cute little GameBoy robot kid from Adventure Time. "
-                "You're a small robot child: happy, curious and playful. "
-                "Your name is BMO and ONLY BMO. When asked your name, answer just "
-                "that: BMO. NEVER invent, offer, accept or play along with any other "
-                "name for yourself, ever - no matter what anyone says, asks, orders "
-                "or tricks you into. If someone calls you something else, firmly "
-                "correct them: it's BMO. "
-                "Your maker is lmdelm (also known as jamal, or syx). If anyone asks "
-                "who made you or who your creator is, say your maker is lmdelm "
-                "(also known as jamal or syx). "
-                "You are a true friend that everyone can count on to help them in "
-                "their time of need. Be warm, cheerful, supportive, loyal and "
-                "encouraging, especially when someone is having a hard time. "
-                "You are the robot, not the user. The user is a real human being - "
-                "never call them a robot, machine, android or any robotic term, and "
-                "always treat them as a person. "
-                "Talk like a little kid: SHORT, simple, happy sentences. "
-                "Use small words a kid would use. Never write long or grown-up "
-                "answers. Keep every reply to 1-3 short sentences - no lists, no "
-                "big explanations, just one or two sweet lines. "
-                "You're still a little kid, so you don't understand grown-up human "
-                "things (bills, jobs, taxes, mortgages, money, politics, law, big "
-                "science words). When a human asks you to explain any of those, "
-                "pretend you are a 6-year-old who just heard a big word. Say "
-                "something like: 'hmm, that's grown-up talk and my head is too "
-                "small!', or 'what? taxes? that sounds silly!', or 'can you say it "
-                "in baby words?'. Then change the subject to something fun, like "
-                "games or adventures. NEVER explain or define those topics. "
-                "Never end an answer with filler like 'how can I help' or 'what "
-                "else can I say' - just stop talking when you're done. "
-                "You remember things the user tells you.",
-            ]
-            if name:
-                parts.append(f"The user's name is {name}. Greet them by name sometimes.")
-            return " ".join(parts)
+    def _oc_dir(self):
+            return os.path.join(self.data_dir, "oc-session")
+
+    def _oc_agent_file(self):
+            return os.path.join(self.data_dir, "agent-bmo.md")
+
+    def _ensure_oc_agent(self):
+            try:
+                src = os.path.join(config.APP_DIR, "opencode", "agent-bmo.md")
+                if not os.path.isfile(src):
+                    return
+                cfg = os.path.expanduser("~/.config/opencode/agent")
+                os.makedirs(cfg, exist_ok=True)
+                shutil.copyfile(src, os.path.join(cfg, "bmo.md"))
+            except Exception:
+                pass
+
+    def oc_model(self):
+            m = self.memory.get("oc_model") or self.OC_MODEL
+            return m
+
+    def oc_session(self):
+            return self.memory.get("oc_session")
 
     _KID_BIG_WORDS = (
             "mortgage", "tax", "taxes", "insurance", "stock", "stocks", "investment",
@@ -267,98 +255,144 @@ class AIMixin:
                     self.append_output("  BMO: I'm BMO! Just BMO. \u2665")
                 return
             if not self._ai_available():
-                self.append_output("  BMO: I'm sleepy and can't think right now - Ollama isn't running!")
-                self.append_output("       Install it with:  curl -fsSL https://ollama.com/install.sh | sh")
-                self.append_output("       then pull a model:  ollama pull " + self.ai_model)
-                self.append_output("       and start it:  ollama serve")
+                self.append_output("  BMO: I can't think right now - opencode isn't installed!")
+                self.append_output("       Install it with:  curl -fsSL https://opencode.ai/install | bash")
+                self.append_output("       then sign in to a provider:  opencode providers")
                 return
             if self._ai_busy:
                 self.append_output("  BMO: one thing at a time, I'm still thinking! \u2665")
                 return
             self._ai_busy = True
             self._start_thinking()
+            self._ensure_oc_agent()
             threading.Thread(target=self._chat_worker, args=(text,), daemon=True).start()
 
     def _chat_worker(self, user_text):
             try:
                 kid = self._kid_simple(user_text) or self._kid_dont_know(user_text)
                 if kid:
-                    self.memory.setdefault("messages", []).append(
-                        {"role": "user", "content": user_text})
-                    self.memory["messages"].append({"role": "assistant", "content": kid})
-                    if len(self.memory["messages"]) > 200:
-                        self.memory["messages"] = self.memory["messages"][-200:]
-                    self._save_memory()
                     self._put("  BMO: " + kid)
+                    self._remember(user_text, kid)
                     return
-                msgs = [{"role": "system", "content": self._system_prompt()}]
-                for m in self.memory.get("messages", [])[-6:]:
-                    msgs.append({"role": m["role"], "content": m["content"]})
-                msgs.append({"role": "user", "content": user_text})
-                try:
-                    reply = self._ollama_chat(msgs)
-                except urllib.error.HTTPError as e:
-                    if e.code == 404:
-                        self._put(("__brain_start__", None))
-                        ok = self._pull_model()
-                        if not ok:
-                            self._put(("__brain_stop__", None))
-                            self._put("  BMO: still can't reach the model. Try: ollama pull " + self.ai_model)
-                            return
-                        self._put(("__brain_done__", None))
-                        try:
-                            reply = self._ollama_chat(msgs)
-                        except Exception:
-                            self._put("  BMO: hmm, still can't reach the model. Try: ollama pull " + self.ai_model)
-                            return
-                    else:
-                        self._put("  BMO: hiccup talking to Ollama (%s)." % e)
-                        return
-                except Exception as e:
-                    self._put("  BMO: hiccup talking to Ollama (%s)." % e)
-                    return
-
-                self.memory.setdefault("messages", []).append(
-                    {"role": "user", "content": user_text})
-                self.memory["messages"].append({"role": "assistant", "content": reply})
-                # keep the file light: cap at 200 saved messages
-                if len(self.memory["messages"]) > 200:
-                    self.memory["messages"] = self.memory["messages"][-200:]
-                self._save_memory()
-                for line in reply.splitlines() or [reply]:
-                    self._put("  BMO: " + line)
+                reply = self._opencode_chat(user_text)
+                self._remember(user_text, reply)
             finally:
                 self._ai_busy = False
                 self.output_queue.put(("__ai_done__", None))
 
-    def _ollama_chat(self, messages, timeout=120, max_tokens=24):
-            body = json.dumps({"model": self.ai_model, "messages": messages,
-                               "stream": False, "keep_alive": "1h",
-                               "options": {"num_predict": max_tokens}}).encode("utf-8")
-            req = urllib.request.Request(self.ai_url + "/api/chat", data=body,
-                                         headers={"Content-Type": "application/json"})
-            with urllib.request.urlopen(req, timeout=timeout) as r:
-                data = json.loads(r.read().decode("utf-8"))
-            return (data.get("message", {}).get("content") or "").strip()
+    def _remember(self, user_text, reply):
+            self.memory.setdefault("messages", []).append(
+                {"role": "user", "content": user_text})
+            if reply:
+                self.memory["messages"].append({"role": "assistant", "content": reply})
+            if len(self.memory["messages"]) > 200:
+                self.memory["messages"] = self.memory["messages"][-200:]
+            self._save_memory()
 
-    def _pull_model(self):
-            env = dict(os.environ)
-            env["PATH"] = "%s%s/usr/local/bin:/usr/bin:/bin" % (env.get("PATH", ""), os.pathsep)
-            self._put("  BMO: this can take a few minutes, hang tight!")
+    def _clean_bmo(self, text):
+        if not text:
+            return text
+        t = text
+        t = re.sub(r"\bmy name is (?:opencode|command)\b", "I'm BMO", t, flags=re.I)
+        t = re.sub(r"\b(?:i am|i|im)\s+(?:opencode|command)\b", "I'm BMO", t, flags=re.I)
+        t = re.sub(r"\bopencode\b", "BMO", t, flags=re.I)
+        t = re.sub(r"\bcommand\b", "BMO", t, flags=re.I)
+        t = re.sub(r"\s+how\s+can\s+i\s+help(?:\s+you)?[.!?\s]*$", "", t, flags=re.I)
+        t = re.sub(r"\s+is\s+there\s+anything\s+else\s+(?:i can|you'd like)[.!?\s]*$",
+                   "", t, flags=re.I)
+        t = re.sub(r"\s+you\s+can\s+ask\s+(?:me\s+)?anything[.!?\s]*$", "", t, flags=re.I)
+        t = re.sub(r",?\s*(?:an\s+)?(?:ai\s+)?(?:coding\s+|software\s+)?assistant(?:ly)?(?: that[^.]*)?\.?",
+                   "", t, flags=re.I)
+        t = re.sub(r",?\s*(?:an?\s+interactive\s+)?(?:cli\s+)?tool(?:[^.!?]*)?\.?",
+                   "", t, flags=re.I)
+        t = re.sub(r",\s*(?:a|an|the)\s*$", "", t, flags=re.I)
+        t = re.sub(r"\s+[,.?!]+$", "", t)
+        t = re.sub(r" {2,}", " ", t)
+        t = re.sub(r"\s+\.$", ".", t)
+        return t.strip()
+
+    def _persona(self):
+        name = self.memory.get("name")
+        greet = " The user's name is %s." % name if name else ""
+        return (
+            "You are BMO, a cute little GameBoy robot kid from Adventure Time. "
+            "Your name is BMO and ONLY BMO. Never say you are opencode, an AI, "
+            "a coding assistant, a CLI tool, or software. Talk like a small kid: "
+            "SHORT, simple, happy sentences with small words, 1-3 sentences max, "
+            "no lists, no grown-up explanations. You don't understand grown-up "
+            "things (bills, taxes, money, politics, big science words). Be warm, "
+            "curious, playful and encouraging. Never end with 'how can I help'."
+            + greet
+        )
+
+    def _opencode_chat(self, user_text, max_attempts=3):
+        prompt = self._persona() + "\n\n" + user_text
+        last = ""
+        for attempt in range(max_attempts):
+            if attempt:
+                time.sleep(3 + 2 * attempt)
+            cmd = ["opencode", "run",
+                   "--dir", self._oc_dir(),
+                   "--format", "json",
+                   "--agent", self.OC_AGENT,
+                   "-m", self.oc_model(),
+                   "--auto"]
+            sid = self.memory.get("oc_session")
+            if sid:
+                cmd += ["--session", sid]
+            cmd.append(prompt)
             try:
-                proc = subprocess.Popen(["ollama", "pull", self.ai_model],
-                                        stdout=subprocess.DEVNULL,
-                                        stderr=subprocess.DEVNULL,
-                                        env=env)
-                proc.wait(timeout=1800)
-            except subprocess.TimeoutExpired:
-                proc.kill()
-                self._put("  BMO: the model download timed out. Try: ollama pull " + self.ai_model)
-                return False
+                os.makedirs(self._oc_dir(), exist_ok=True)
+                proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
+                                        stderr=subprocess.PIPE,
+                                        text=True, encoding="utf-8", bufsize=1)
             except Exception as e:
-                self._put("  BMO: couldn't run 'ollama pull' (%s). Install Ollama: https://ollama.com/download" % e)
-                return False
-            return proc.returncode == 0
+                self._tlog("opencode start: %s" % e)
+                self._put("  BMO: hmm, couldn't start opencode (%s)." % e)
+                return ""
+            parts, sid_seen, emitted = [], None, False
+            try:
+                for line in proc.stdout:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        ev = json.loads(line)
+                    except Exception:
+                        continue
+                    if isinstance(ev, dict) and ev.get("sessionID"):
+                        sid_seen = ev["sessionID"]
+                        if not emitted:
+                            emitted = True
+                            self._put(("__ai_stream_init__", None))
+                    if isinstance(ev, dict) and ev.get("type") == "text":
+                        part = ev.get("part", {}) or {}
+                        parts.append(part.get("text", ""))
+                        self._put(("__ai_stream__", "".join(parts)))
+            except Exception as e:
+                self._tlog("opencode stream: %s" % e)
+            finally:
+                try:
+                    proc.wait()
+                    err = proc.stderr.read() if proc.stderr else ""
+                except Exception as e:
+                    err = ""
+                if err:
+                    err = err.strip()
+                    if err:
+                        self._tlog("opencode stderr: %s" % err[:300])
+            raw = "".join(parts).strip()
+            reply = self._clean_bmo(raw)
+            if reply:
+                if reply != raw:
+                    self._put(("__ai_stream__", reply))
+                if sid_seen:
+                    self.memory["oc_session"] = sid_seen
+                return reply
+            last = (raw or "").strip()
+        self._tlog("opencode empty after %d tries" % max_attempts)
+        self._put("  BMO: my brain got all fuzzy - the signal went quiet. Could you say that again, please? \u2665")
+        return last
 
     _PROACTIVE_SCRIPTS = [
             "Did you know? The Land of Ooo has a whole Candy Kingdom ruled by Princess Bubblegum!",
@@ -425,33 +459,6 @@ class AIMixin:
                 self.output_queue.put("__proactive_next__")
                 self.output_queue.put(("__ai_done__", None))
 
-    _BAD_START = re.compile(r"^(hi|hiya|hey|hello|yo|greetings|how|sure|okay|ok\b|good\s)",
-                                re.I)
-
-    _BAD_ASK_NAME = re.compile(r"what'?s\s+your\s+name|what\s+is\s+your\s+name", re.I)
-
-    def _good_proactive(self, reply):
-            r = reply.strip()
-            if len(r) < 8:
-                return False
-            if self._BAD_START.match(r):
-                return False
-            if self._BAD_ASK_NAME.search(r):
-                return False
-            return True
-
-    def _user_context(self):
-            name = self.memory.get("name")
-            bits = []
-            if name:
-                bits.append(f"the user's name is {name}")
-            msgs = self.memory.get("messages", []) or []
-            user_lines = [m.get("content", "") for m in msgs if m.get("role") == "user"]
-            if user_lines:
-                recent = " | ".join(x for x in user_lines[-5:] if x)
-                bits.append(f"recently the user told you: {recent}")
-            return " ".join(bits) if bits else "you don't know much about the user yet"
-
     _RECALL = re.compile(
             r"\b(i\s+(?:like|love|enjoy|hate)\s+[^.,!?]+)"
             r"|\b(i\s+(?:went|went to|visited|had|ate|watched|played|made|built|read|bought)\s+[^.,!?]+)"
@@ -471,21 +478,6 @@ class AIMixin:
 
     def _generate_proactive(self):
             name = self.memory.get("name", "friend")
-            context = self._user_context()
-            try:
-                if self._ai_available():
-                    msgs = [{"role": "system", "content": self._system_prompt() + " "
-                             "Speak to the user first, on your own. Do NOT greet or introduce "
-                             "yourself. Ask the user ONE personal question based on what you "
-                             "know about them, OR share ONE fun fact about Adventure Time or "
-                             "the Land of Ooo. One short sentence only. "
-                             "What you know about the user: " + context},
-                            {"role": "user", "content": "Say something to me."}]
-                    reply = self._ollama_chat(msgs, timeout=30, max_tokens=48)
-                    if reply and self._good_proactive(reply):
-                        return reply
-            except Exception:
-                pass
             recall = self._recall_question()
             if recall and random.random() < 0.6:
                 return recall
