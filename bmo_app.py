@@ -63,6 +63,8 @@ class GameBoyTerminal(UpdateMixin, ShellMixin, VoiceMixin, AIMixin):
 
             self.saver_active = False
             self.saver_state = "normal"
+            self.current_face = "normal"
+            self.faces = ["normal", "happy", "wink", "wow", "laugh", "love", "sleepy"]
             self.saver_canvas = None
             self._saver_photo = None
             self._saver_jobs = []
@@ -298,7 +300,10 @@ class GameBoyTerminal(UpdateMixin, ShellMixin, VoiceMixin, AIMixin):
                 return
             files = {"normal": "face.png", "blink": "blink.png",
                      "left": "face_left.jpg", "right": "face_right.jpg",
-                     "sleep": "sleep.png"}
+                     "sleep": "sleep.png", "wow": "face_wow.png",
+                     "wink": "face_wink.png", "laugh": "face_laugh.png",
+                     "love": "face_love.png", "sleepy": "face_sleepy.png",
+                     "happy": "face_happy.png"}
             for key, fn in files.items():
                 path = os.path.join(self.imagedir, fn)
                 if os.path.exists(path):
@@ -397,7 +402,7 @@ class GameBoyTerminal(UpdateMixin, ShellMixin, VoiceMixin, AIMixin):
             elif blink:
                 key = "blink"
             else:
-                key = self.saver_state or "normal"
+                key = self.current_face or "normal"
             img = self.images.get(key) or self.images.get("normal")
             if img is None:
                 return
@@ -1042,6 +1047,10 @@ class GameBoyTerminal(UpdateMixin, ShellMixin, VoiceMixin, AIMixin):
                 self.cmd_talk()
             elif cmd_lower.startswith("talk "):
                 self.cmd_talk(cmd[5:].strip())
+            elif cmd_lower in ("faces", "face"):
+                self.cmd_faces()
+            elif cmd_lower.startswith("face "):
+                self.cmd_faces(cmd[5:].strip())
             elif cmd_lower == "update":
                 self.cmd_update()
             elif cmd_lower.startswith("update "):
@@ -1085,6 +1094,20 @@ class GameBoyTerminal(UpdateMixin, ShellMixin, VoiceMixin, AIMixin):
             self.memory.pop("oc_session", None)
             self._save_memory()
             self.append_output("  BMO: Ok, I'll forget our chats... but I still remember you! \u2665")
+
+    def cmd_faces(self, arg=None):
+        if not arg:
+            self.append_output("  BMO faces: " + ", ".join(self.faces))
+            self.append_output("       pick one: /face <name>")
+            return
+        name = arg.strip().lower()
+        if name not in self.faces or name not in self.images:
+            self.append_output(f"  BMO: no face called '{name}'. Try: {', '.join(self.faces)}")
+            return
+        self.current_face = name
+        if self.saver_active:
+            self.show_saver_image()
+        self.append_output(f"  BMO: new face! ({name}) \u2665")
 
     def cmd_model(self, arg=None):
             if arg:
@@ -1141,6 +1164,7 @@ class GameBoyTerminal(UpdateMixin, ShellMixin, VoiceMixin, AIMixin):
             self.append_output("    /voice on|off    - BMO talks out loud (hold MIC to talk to him)")
             self.append_output("    /voice test      - hear my voice (pitch/speed/variant to tune it)")
             self.append_output("    /talk on|off     - BMO chats on his own")
+            self.append_output("    /faces           - list faces; /face <name> to pick one")
             self.append_output("    /update now      - check for updates")
             self.append_output("    /mo              - open opencode")
             self.append_output("    /gmo             - open w3m browser")
