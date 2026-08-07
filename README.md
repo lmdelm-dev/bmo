@@ -55,25 +55,12 @@ cd bmo
 ## Using BMO
 
 - **Just type** anything and BMO chats with you ♥
-- **Commands** start with `/`:
-
-| command | does |
-| --- | --- |
-| `/help` | show all commands |
-| `/name <string>` | tell BMO your name |
-| `/memory` | what BMO remembers |
-| `/forget` | forget everything |
-| `/model [string]` | change the AI model |
-| `/talk on\|off` | BMO chats up on his own |
-| `/fs`, `/clear`, `/quit` | fullscreen / clear / quit |
-
-- The blue **_** button minimizes, the red **X** closes BMO (`Ctrl+Alt+B` restores
-  if DNA allows it), **F11** toggles fullscreen
+- BMO remembers your name and what you tell it
+- The blue **`_`** button minimizes, the red **X** closes, **F11** toggles fullscreen
 
 > **First chat?** Make sure `opencode` is installed and you've signed in to a
 > provider (`opencode providers`). BMO connects to its opencode "brain" on
-> chatter away - no local model to download. Type `/model <provider/model>`
-> anytime to switch brains.
+> chatter away - no local model to download.
 
 ## For maintainers
 

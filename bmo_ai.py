@@ -428,14 +428,6 @@ class AIMixin:
             except Exception:
                 pass
 
-    def _cancel_proactive(self):
-            if getattr(self, "_proactive_job", None) is not None:
-                try:
-                    self.root.after_cancel(self._proactive_job)
-                except Exception:
-                    pass
-                self._proactive_job = None
-
     def _maybe_talk(self):
             self._proactive_job = None
             if not self.proactive_on:
@@ -480,20 +472,4 @@ class AIMixin:
             if recall and random.random() < 0.6:
                 return recall
             return random.choice(self._PROACTIVE_SCRIPTS).format(name=name)
-
-    def cmd_talk(self, arg=None):
-            if arg:
-                if arg.lower() in ("on", "yes", "1"):
-                    self.proactive_on = True
-                    self._schedule_proactive()
-                    self.append_output("  BMO: Ok, I'll pop in and chat sometimes! \u2665")
-                elif arg.lower() in ("off", "no", "0"):
-                    self.proactive_on = False
-                    self._cancel_proactive()
-                    self.append_output("  BMO: Ok, I'll stay quiet unless you talk to me.")
-                else:
-                    self.append_output("  BMO: use /talk on or /talk off")
-                return
-            state = "on" if self.proactive_on else "off"
-            self.append_output(f"  BMO: spontaneous talking is {state}.  (change: /talk on|off)")
 

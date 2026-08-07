@@ -229,25 +229,14 @@ class BMO(AIMixin):
     def append(self, text):
         self.append_output(text)
 
-    def clear_output(self):
-        self._stream_mark = None
-        self._stop_thinking()
-        self.output.configure(state="normal")
-        self.output.delete("1.0", "end")
-        self.output.configure(state="disabled")
-
     def submit(self, event=None):
         text = self._input_var.get().strip()
         self._input_var.set("")
         if text:
             self.history.append(text)
             self.history_idx = len(self.history)
-            if text.startswith("/"):
-                self.append("> " + text)
-                self._command(text[1:].strip())
-            elif text:
-                self.append("> " + text)
-                self.handle_chat(text)
+            self.append("> " + text)
+            self.handle_chat(text)
         self.input_entry.focus_set()
 
     def history_up(self, event):
@@ -265,88 +254,6 @@ class BMO(AIMixin):
                 self._input_var.set(self.history[self.history_idx])
         return "break"
 
-    def _command(self, cmd):
-        cmd = cmd.strip()
-        low = cmd.lower()
-        if low in ("clear", "cls"):
-            self.clear_output()
-        elif low in ("help", "?"):
-            self.show_help()
-        elif low in ("fs", "fullscreen"):
-            self.toggle_fullscreen()
-        elif low in ("exit", "quit"):
-            self.close_btn_click()
-        elif low == "name":
-            self._cmd_name("")
-        elif low.startswith("name"):
-            self._cmd_name(cmd[4:].strip())
-        elif low == "memory":
-            self._cmd_memory()
-        elif low == "forget":
-            self._cmd_forget()
-        elif low == "model":
-            self._cmd_model()
-        elif low.startswith("model "):
-            self._cmd_model(cmd[6:].strip())
-        elif low == "talk":
-            self.cmd_talk()
-        elif low.startswith("talk "):
-            self.cmd_talk(cmd[5:].strip())
-        else:
-            self.append("  BMO: I don't know that command. Try /help!")
-
-    def _cmd_name(self, arg=""):
-        if not arg:
-            self.append("  BMO: Tell me your name with /name <name>!")
-            return
-        if self._reserved_name(arg):
-            self.append("  BMO: That's my name! (I'm BMO \u2665)")
-            return
-        self.memory["name"] = arg[:40]
-        self.pending_name = False
-        self.pending_confirm = None
-        self._save_memory()
-        self.append(f"  BMO: Nice to meet you, {arg}! I'll remember you. \u2665")
-
-    def _cmd_memory(self):
-        m = self.memory
-        name = m.get("name")
-        self.append("  BMO MEMORY")
-        self.append(f"    name: {name if name else '(not set)'}")
-        self.append(f"    conversations: {len(m.get('messages', []))} messages")
-        self.append("  Use /forget to erase, /name <n> to change your name.")
-
-    def _cmd_forget(self):
-        self.memory = {"name": self.memory.get("name", ""), "messages": []}
-        self.memory.pop("oc_session", None)
-        self._save_memory()
-        self.append("  BMO: Ok, I'll forget our chats... but I still remember you! \u2665")
-
-    def _cmd_model(self, arg=None):
-        if arg:
-            self.memory["oc_model"] = arg
-            self._save_memory()
-            self.append(f"  BMO: my brain is now {arg}. \u2665")
-            return
-        self.append(f"  BMO: my brain is online via opencode -> {self.oc_model()}")
-        self.append("       (switch it: /model <provider/model>)")
-
-    def show_help(self):
-        self.append("  BMO - your GameBoy friend \u2665")
-        self.append("  My brain is online via opencode.")
-        self.append("")
-        self.append("  Commands:")
-        self.append("    /help            - this screen")
-        self.append("    /name <name>     - tell me your name")
-        self.append("    /memory          - what I remember")
-        self.append("    /forget          - clear chat memory")
-        self.append("    /model [name]    - show/change brain model")
-        self.append("    /talk on|off     - BMO chats on his own")
-        self.append("    /fs              - fullscreen")
-        self.append("    /clear           - clear screen")
-        self.append("    /quit            - close BMO")
-        self.append("  Up/Down = history")
-
     def welcome(self):
         self.append("  /\\_/\\")
         self.append("  ( o.o )")
@@ -361,7 +268,7 @@ class BMO(AIMixin):
         else:
             self.append(f"  BMO: Hey {name}! Good to see you! \u2665")
         self.append("")
-        self.append("  Chat with me by typing, or use '/' commands: /help")
+        self.append("  Just type anything and I'll chat with you!")
         self.append("")
 
     # ---------------- memory ----------------
