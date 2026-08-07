@@ -124,6 +124,12 @@ class BMO(AIMixin):
                                     insertbackground="#101E2B", bd=0,
                                     highlightthickness=0)
         self.input_entry.pack(side="left", fill="x", expand=True)
+        self.input_entry.bind("<Button-1>", lambda e: self.entry_click())
+        self.in_inner.bind("<Button-1>", lambda e: self.entry_click())
+        self.in_wrap.bind("<Button-1>", lambda e: self.entry_click())
+
+    def entry_click(self):
+        self.root.after_idle(self.force_focus)
 
     def _round_btn(self, parent, color, hover, text, text_color, command):
         btn = tk.Canvas(parent, bg="#63BDA4", highlightthickness=0, cursor="hand2")
@@ -165,6 +171,7 @@ class BMO(AIMixin):
         self.root.bind("<Button-1>", self.on_press)
         self.root.bind("<B1-Motion>", self.on_drag)
         self.root.bind("<ButtonRelease-1>", self.on_release)
+        self.input_entry.bind("<Return>", self.submit)
         self.input_entry.bind("<Up>", self.history_up)
         self.input_entry.bind("<Down>", self.history_down)
 
@@ -237,7 +244,7 @@ class BMO(AIMixin):
             self.history_idx = len(self.history)
             self.append("> " + text)
             self.handle_chat(text)
-        self.input_entry.focus_set()
+        self.root.after_idle(self.force_focus)
 
     def history_up(self, event):
         if self.history and self.history_idx > 0:
