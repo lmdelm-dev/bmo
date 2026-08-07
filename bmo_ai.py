@@ -441,11 +441,9 @@ class AIMixin:
             if not self.proactive_on:
                 return
             if (self.pending_name or self.pending_confirm or self._ai_busy or
-                    self.term_active or not self.memory.get("name")):
+                    not self.memory.get("name")):
                 self._schedule_proactive()
                 return
-            if self.saver_active:
-                self.exit_saver()
             self._start_thinking()
             threading.Thread(target=self._proactive_worker, args=(), daemon=True).start()
 

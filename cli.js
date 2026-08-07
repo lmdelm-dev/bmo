@@ -86,32 +86,7 @@ function bootstrapDeps() {
     }
   }
 
-  // --- xterm (embedded interactive terminal) - Linux only ---
-  if (isLinux && !have("xterm")) {
-    console.log("bmo: xterm missing (BMO's embedded terminal needs it) - installing...");
-    sh("bash", ["-c",
-      "if command -v apt-get >/dev/null; then sudo apt-get install -y xterm;" +
-      " elif command -v zypper >/dev/null; then sudo zypper install -y xterm;" +
-      " elif command -v dnf >/dev/null; then sudo dnf install -y xterm;" +
-      " elif command -v pacman >/dev/null; then sudo pacman -S --noconfirm xterm; fi"]);
-  }
-
-  // --- espeak-ng (BMO's voice - text-to-speech) ---
-  if (isLinux && !have("espeak-ng") && !have("espeak")) {
-    console.log("bmo: espeak-ng missing (BMO's voice) - installing...");
-    sh("bash", ["-c",
-      "if command -v apt-get >/dev/null; then sudo apt-get install -y espeak-ng;" +
-      " elif command -v zypper >/dev/null; then sudo zypper install -y espeak-ng;" +
-      " elif command -v dnf >/dev/null; then sudo dnf install -y espeak-ng;" +
-      " elif command -v pacman >/dev/null; then sudo pacman -S --noconfirm espeak-ng; fi"]);
-  }
-  if (process.platform === "darwin" && !have("espeak-ng") && !have("espeak")) {
-    console.log("bmo: installing espeak (BMO's voice) via Homebrew...");
-    try { sh("brew", ["install", "espeak"]); }
-    catch (_) { console.log("bmo: (espeak install failed - text-only for now)"); }
-  }
-
-  // --- opencode (BMO's brain: powers chat + the 'mo' shortcut) ---
+  // --- opencode (BMO's brain: powers chat) ---
   if (!have("opencode")) {
     console.log("bmo: opencode missing - installing via curl -fsSL https://opencode.ai/install | bash ...");
     const ok = isWin
@@ -127,37 +102,9 @@ function bootstrapDeps() {
     }
   }
 
-  // --- Pillow + python-xlib (pip --user) ---
-  try { execFileSync(py, ["-c", "import PIL"], { stdio: "ignore" }); }
-  catch (_) {
-    console.log("bmo: installing Pillow (face saver)...");
-    try { sh(py, ["-m", "pip", "install", "--user", "Pillow"]); }
-    catch (_) { console.log("bmo: (Pillow install failed - face saver disabled)"); }
-  }
-  if (isLinux) {
-    try { execFileSync(py, ["-c", "import Xlib"], { stdio: "ignore" }); }
-    catch (_) {
-      console.log("bmo: installing python-xlib (minimize/restore hotkey)...");
-      try { sh(py, ["-m", "pip", "install", "--user", "python-xlib"]); }
-      catch (_) { console.log("bmo: (python-xlib install failed - restore hotkey disabled)"); }
-    }
-  }
-  try { execFileSync(py, ["-c", "import vosk"], { stdio: "ignore" }); }
-  catch (_) {
-    console.log("bmo: installing vosk (BMO's ears - speech-to-text)...");
-    let ok = false;
-    try { sh(py, ["-m", "pip", "install", "--user", "vosk"]); ok = true; }
-    catch (_) { try { sh(py, ["-m", "pip", "install", "--user", "--break-system-packages", "vosk"]); ok = true; } catch (__) {} }
-    if (!ok) console.log("bmo: (vosk install failed - hold-MIC talking disabled; fix later: pip install --user vosk)");
-  }
-  try { execFileSync(py, ["-c", "import piper"], { stdio: "ignore" }); }
-  catch (_) {
-    console.log("bmo: installing piper-tts (BMO's human voice)...");
-    let ok = false;
-    try { sh(py, ["-m", "pip", "install", "--user", "piper-tts"]); ok = true; }
-    catch (_) { try { sh(py, ["-m", "pip", "install", "--user", "--break-system-packages", "piper-tts"]); ok = true; } catch (__) {} }
-    if (!ok) console.log("bmo: (piper-tts install failed - BMO uses its older voice; fix later: pip install --user piper-tts)");
-  }
+  // --- Pillow (nothing needed anymore: no faces/saver) ---
+
+  // --- vosk / piper removed (no voice) ---
   return py;
 }
 

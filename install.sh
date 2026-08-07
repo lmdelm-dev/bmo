@@ -5,11 +5,7 @@
 #
 # The installer checks for, and installs when missing:
 #   - Python 3 + tkinter   (system package)
-#   - Pillow, python-xlib, vosk, piper-tts  (pip --user)
-#   - espeak-ng             (system package; BMO's backup voice)
-#   - sox                   (system package; pitch-shifts Piper into BMO's kid voice)
 #   - opencode              (curl -fsSL https://opencode.ai/install | bash)
-#   - xterm                 (system package; powers BMO's embedded terminal)
 #   - the Blue Water font   (shipped, fc-cache)
 # then drops a double-clickable BMO icon on your desktop.
 set -uo pipefail
@@ -94,57 +90,7 @@ fi
 ! need python3 && { echo "ERROR: Python 3 still not found - cannot continue." >&2; exit 1; }
 python3 -c "import tkinter" 2>/dev/null || { echo "ERROR: tkinter still not importable." >&2; exit 1; }
 
-# --- xterm (the embedded interactive terminal, optional on non-Linux) ---
-if [ "$(uname -s)" = "Linux" ] && ! need xterm; then
-    echo "    xterm is missing (BMO's embedded terminal needs it)."
-    if ask "    Install xterm now?"; then
-        if need apt-get; then sudo apt-get install -y xterm
-        elif need zypper; then sudo zypper install -y xterm
-        elif need dnf; then sudo dnf install -y xterm
-        elif need pacman; then sudo pacman -S --noconfirm xterm
-        else echo "    (could not auto-install xterm - interactive terminal will be disabled until you install it)"
-        fi
-    fi
-    need xterm || echo "    continuing without xterm (embedded terminal disabled)"
-fi
-
-# --- espeak-ng (BMO's voice - text-to-speech) ---
-if [ "$(uname -s)" = "Linux" ] && ! need espeak-ng && ! need espeak; then
-    echo "    espeak-ng is missing (BMO's voice)."
-    if ask "    Install espeak-ng now?"; then
-        if need apt-get; then sudo apt-get install -y espeak-ng
-        elif need zypper; then sudo zypper install -y espeak-ng
-        elif need dnf; then sudo dnf install -y espeak-ng
-        elif need pacman; then sudo pacman -S --noconfirm espeak-ng
-        else echo "    (could not auto-install espeak-ng - BMO will talk in text until you install it)"
-        fi
-    fi
-    need espeak-ng || need espeak || echo "    continuing without voice (text-only for now)"
-fi
-if [ "$(uname -s)" = "Darwin" ] && ! need espeak-ng && ! need espeak; then
-    echo "    installing espeak (BMO's voice) via Homebrew..."
-    brew install espeak 2>/dev/null || echo "    (espeak install failed - text-only for now)"
-fi
-
-# --- sox (pitch-shifts Piper into BMO's little-kid voice) ---
-if [ "$(uname -s)" = "Linux" ] && ! need sox; then
-    echo "    sox is missing (makes BMO's human voice sound like a little kid)."
-    if ask "    Install sox now?"; then
-        if need apt-get; then sudo apt-get install -y sox
-        elif need zypper; then sudo zypper install -y sox
-        elif need dnf; then sudo dnf install -y sox
-        elif need pacman; then sudo pacman -S --noconfirm sox
-        else echo "    (could not auto-install sox - BMO will keep its normal voice)"
-        fi
-    fi
-    need sox || echo "    continuing without sox (BMO uses its normal voice; /voice kid off)"
-fi
-if [ "$(uname -s)" = "Darwin" ] && ! need sox; then
-    echo "    installing sox via Homebrew (BMO's little-kid voice)..."
-    brew install sox 2>/dev/null || echo "    (sox install failed - BMO keeps its normal voice)"
-fi
-
-# --- opencode (BMO's brain - powers chat + the 'mo' command) ---
+# --- opencode (BMO's brain - powers chat) ---
 if ! need opencode; then
     echo "    opencode is missing (BMO's AI brain - it powers chat and 'mo')."
     echo "    Free to install; BMO will guide you to sign in to a provider on first chat."
@@ -158,31 +104,6 @@ if ! need opencode; then
         esac
     fi
     need opencode || echo "    continuing without opencode (BMO will show the install command on first chat)"
-fi
-
-# --- pip libs (Pillow face-saver; python-xlib minimize/restore hotkey on Linux) ---
-PIP_FAIL=0
-if ! python3 -c "import PIL" 2>/dev/null; then
-    echo "    installing Pillow (BMO face saver)..."
-    python3 -m pip install --user Pillow >/dev/null 2>&1 || \
-        { echo "    (Pillow install failed - face saver disabled)"; PIP_FAIL=1; }
-fi
-if [ "$(uname -s)" = "Linux" ] && ! python3 -c "import Xlib" 2>/dev/null; then
-    echo "    installing python-xlib (minimize/restore hotkey)..."
-    python3 -m pip install --user python-xlib >/dev/null 2>&1 || \
-        echo "    (python-xlib install failed - minimize/restore hotkey disabled)"
-fi
-if ! python3 -c "import vosk" 2>/dev/null; then
-    echo "    installing vosk (BMO's ears - speech-to-text)..."
-    ( python3 -m pip install --user vosk >/dev/null 2>&1 || \
-      python3 -m pip install --user --break-system-packages vosk >/dev/null 2>&1 ) || \
-        echo "    (vosk install failed - hold-MIC talking disabled; fix later: pip install --user vosk)"
-fi
-if ! python3 -c "import piper" 2>/dev/null; then
-    echo "    installing piper-tts (BMO's human voice)..."
-    ( python3 -m pip install --user piper-tts >/dev/null 2>&1 || \
-      python3 -m pip install --user --break-system-packages piper-tts >/dev/null 2>&1 ) || \
-        echo "    (piper-tts install failed - BMO will use its older voice; fix later: pip install --user piper-tts)"
 fi
 
 # ----------------------------------------------------------------------------

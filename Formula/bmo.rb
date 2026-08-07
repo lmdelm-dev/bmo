@@ -17,9 +17,8 @@ class Bmo < Formula
 
   def install
     # Ship the Python app (multi-module layout) + assets to libexec
-    libexec.install "bmo.py", "bmo_app.py", "bmo_ai.py", "bmo_voice.py",
-                    "bmo_update.py", "bmo_shell.py", "bmo_config.py",
-                    "bmo_secure.py", "gameboy.py", "assets"
+    libexec.install "bmo.py", "bmo_app.py", "bmo_ai.py",
+                    "bmo_config.py", "bmo_secure.py", "gameboy.py", "assets"
     # Keep the repo launcher as-is for reference, but create a proper wrapper
     (bin/"bmo").write <<~EOS
       #!/bin/bash

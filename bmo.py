@@ -9,7 +9,7 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from bmo_app import GameBoyTerminal  # noqa: E402
+from bmo_app import BMO  # noqa: E402
 
 if __name__ == "__main__":
-    app = GameBoyTerminal()
+    app = BMO()
